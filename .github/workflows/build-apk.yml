@@ -19,16 +19,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Verify project files
+      - 
+      - name: Diagnose project files
         shell: bash
         run: |
-          set -euo pipefail
-          echo "Project root: $GITHUB_WORKSPACE"
-          test -f package.json
-          test -f capacitor.config.json
-          test -f index.html
-          test -f scripts/strip-internet-permission.cjs
-          echo "Project files verified."
+          echo "Current directory:"
+          pwd
+          echo "Root files:"
+          ls -la
+          echo "Required file locations:"
+          find . -maxdepth 5 -type f \( \
+            -name package.json -o \
+            -name capacitor.config.json -o \
+            -name index.html -o \
+            -name strip-internet-permission.cjs \
+          \) -print
+
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

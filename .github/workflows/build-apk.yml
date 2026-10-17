@@ -1,86 +1,46 @@
-name: Build Offline Android APK
 
-on:
-  workflow_dispatch:
-  push:
-    branches:
-      - main
-      - master
-
-permissions:
-  contents: read
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Locate project root
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Repository checkout location: $GITHUB_WORKSPACE"
-          ls -la "$GITHUB_WORKSPACE"
-          PROJECT_DIR="$(find "$GITHUB_WORKSPACE" -maxdepth 5 -type f -name package.json -printf '%h\n' | while IFS= read -r dir; do
-            if [ -f "$dir/capacitor.config.json" ] && [ -f "$dir/index.html" ]; then echo "$dir"; break; fi
-          done)"
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "ERROR: Project root not found."
-            find "$GITHUB_WORKSPACE" -maxdepth 5 -type f \( -name package.json -o -name capacitor.config.json \) -print
-            exit 1
-          fi
-          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
           node-version: 22
 
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: "21"
           cache: gradle
 
       - name: Install web dependencies
-        working-directory: ${{ env.PROJECT_DIR }}
         run: npm install --no-audit --no-fund
 
       - name: Build web assets
-        working-directory: ${{ env.PROJECT_DIR }}
         run: npm run build
 
       - name: Generate Android project
-        working-directory: ${{ env.PROJECT_DIR }}
         run: npx cap add android
 
       - name: Block internet permission
-        working-directory: ${{ env.PROJECT_DIR }}
         run: node scripts/strip-internet-permission.cjs
 
       - name: Sync Capacitor assets
-        working-directory: ${{ env.PROJECT_DIR }}
         run: npx cap sync android
 
       - name: Re-apply internet permission block
-        working-directory: ${{ env.PROJECT_DIR }}
         run: node scripts/strip-internet-permission.cjs
 
       - name: Verify internet permission removal rule
-        working-directory: ${{ env.PROJECT_DIR }}
         shell: bash
         run: |
           set -euo pipefail
-          MANIFEST=android/app/src/main/AndroidManifest.xml
-          test -f "$MANIFEST" || { echo "Android manifest not found"; exit 1; }
-          grep -q 'tools:node="remove"' "$MANIFEST" || { echo "INTERNET permission removal rule missing"; cat "$MANIFEST"; exit 1; }
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          test -f "$MANIFEST" || { echo "ERROR: Android manifest not found"; exit 1; }
+          grep -q 'tools:node="remove"' "$MANIFEST" || {
+            echo "ERROR: INTERNET permission removal rule missing from manifest"
+            cat "$MANIFEST"
+            exit 1
+          }
           echo "Manifest contains an explicit INTERNET permission removal rule."
 
       - name: Build debug APK
-        working-directory: ${{ env.PROJECT_DIR }}/android
+        working-directory: android
         shell: bash
         run: |
           set -euo pipefail
@@ -91,6 +51,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: meraj-media-player-debug-apk
-          path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
+

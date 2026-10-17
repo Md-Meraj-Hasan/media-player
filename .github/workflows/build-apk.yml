@@ -161,7 +161,7 @@ jobs:
               if html_name not in names:
                   raise SystemExit("APK is missing assets/public/index.html")
               html = z.read(html_name).decode("utf-8", "replace")
-              refs = re.findall(r'(?:src|href)=["\\'])([^"\\']+)["\\']', html)
+              refs = re.findall(r"""(?:src|href)=["']([^"']+)["']""", html)
               refs = [r for r in refs if not r.startswith(("http:", "https:", "data:", "//", "/"))]
               for ref in refs:
                   target = "assets/public/" + ref.split("?", 1)[0]

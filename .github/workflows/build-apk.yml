@@ -19,66 +19,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Diagnose project files
-        shell: bash
-        run: |
-          echo "===== REPOSITORY ROOT ====="
-          pwd
-          ls -la
-
-          echo "===== SEARCHING PROJECT FILES ====="
-          find . -maxdepth 5 -type f \( \
-            -name package.json -o \
-            -name package-lock.json -o \
-            -name capacitor.config.json -o \
-            -name index.html -o \
-            -name strip-internet-permission.cjs \
-          \) -print
-
-      - name: Verify project configuration
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [ ! -f package.json ]; then
-            echo "ERROR: package.json is missing."
-            echo "Add the project's package.json to the repository root."
-            exit 1
-          fi
-
-          if [ ! -f capacitor.config.json ]; then
-            echo "ERROR: capacitor.config.json is missing."
-            exit 1
-          fi
-
-          if [ ! -f index.html ]; then
-            echo "ERROR: index.html is missing."
-            exit 1
-          fi
-
-          if [ ! -f scripts/strip-internet-permission.cjs ]; then
-            echo "ERROR: Internet permission script is missing."
-            exit 1
-          fi
-
-          if [ ! -f scripts/integrate-native-media.cjs ] || [ ! -f android-native/MediaPermissionPlugin.kt ] || [ ! -f android-native/MediaLibraryScannerPlugin.kt ] || [ ! -f android-native/MerajMediaPlayerPlugin.kt ]; then
-            echo "ERROR: Native media integration files are missing."
-            exit 1
-          fi
-
-          echo "Project configuration verified."
-
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: 22
+          cache: npm
 
-      - name: Set up Java
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "21"
-          cache: gradle
+          java-version: 21
 
       - name: Install web dependencies
         run: npm install --no-audit --no-fund
@@ -119,14 +70,14 @@ jobs:
             exit 1
           fi
 
-          if ! grep -q 'tools:node="remove"' "$MANIFEST"; then
-            echo "ERROR: INTERNET permission removal rule is missing."
+          if grep -q 'android.permission.INTERNET' "$MANIFEST"; then
+            echo "ERROR: Internet permission is present."
             cat "$MANIFEST"
             exit 1
           fi
 
           if ! grep -q 'android.permission.READ_MEDIA_AUDIO' "$MANIFEST"; then
-            echo "ERROR: READ_MEDIA_AUDIO permission is missing."
+            echo "ERROR: Android audio permission is missing."
             cat "$MANIFEST"
             exit 1
           fi
@@ -152,30 +103,54 @@ jobs:
         run: |
           set -euo pipefail
           APK="android/app/build/outputs/apk/debug/app-debug.apk"
+
           python3 - "$APK" <<'PYVERIFY'
-          import re, sys, zipfile
+          import posixpath, re, sys, zipfile
+
           apk = sys.argv[1]
+
           with zipfile.ZipFile(apk) as z:
               names = set(z.namelist())
               html_name = "assets/public/index.html"
+
               if html_name not in names:
                   raise SystemExit("APK is missing assets/public/index.html")
+
               html = z.read(html_name).decode("utf-8", "replace")
-              refs = re.findall(r"""(?:src|href)=["']([^"']+)["']""", html)
-              refs = [r for r in refs if not r.startswith(("http:", "https:", "data:", "//", "/"))]
+              refs = re.findall(r'''(?:src|href)=["']([^"']+)["']''', html)
+
+              refs = [
+                  ref for ref in refs
+                  if not ref.startswith(
+                      ("http:", "https:", "data:", "//", "/")
+                  )
+              ]
+
               for ref in refs:
-                  target = "assets/public/" + ref.split("?", 1)[0]
+                  clean_ref = ref.split("?", 1)[0].split("#", 1)[0]
+                  target = posixpath.normpath(
+                      posixpath.join("assets/public", clean_ref)
+                  )
+
                   if target not in names:
-                      raise SystemExit(f"APK HTML references missing asset: {target}")
-              if not any(r.endswith(".js") for r in refs):
-                  raise SystemExit("APK HTML has no local JavaScript bundle reference")
+                      raise SystemExit(
+                          f"APK HTML references missing asset: {target}"
+                      )
+
+              if not any(
+                  ref.split("?", 1)[0].endswith(".js") for ref in refs
+              ):
+                  raise SystemExit(
+                      "APK HTML has no local JavaScript bundle reference"
+                  )
+
               print("APK web assets verified:", len(refs), "local references")
           PYVERIFY
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: meraj-media-player-debug-apk
+          name: meraj-music-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14

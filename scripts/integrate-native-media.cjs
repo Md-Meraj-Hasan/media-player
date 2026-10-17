@@ -104,4 +104,39 @@ const permissions = [
 const missing = permissions.filter(p => !xml.includes(p));
 if (missing.length) xml = xml.replace(/<manifest\b[^>]*>/, m => `${m}\n    ${missing.join('\n    ')}`);
 fs.writeFileSync(manifest, xml);
+
+// The native media plugins are Kotlin source files. Capacitor's generated
+// template can use a Java MainActivity and may not apply the Kotlin Android
+// plugin by default, so enable Kotlin in both the root and app Gradle files.
+function ensureKotlinGradlePlugin() {
+  const rootGradle = path.join(androidRoot, 'build.gradle');
+  const appGradle = path.join(appRoot, 'build.gradle');
+  if (!fs.existsSync(rootGradle) || !fs.existsSync(appGradle)) {
+    throw new Error('Expected Groovy Gradle files android/build.gradle and android/app/build.gradle were not generated.');
+  }
+
+  let rootText = fs.readFileSync(rootGradle, 'utf8');
+  const rootPluginLine = "    id 'org.jetbrains.kotlin.android' version '2.1.0' apply false";
+  if (!rootText.includes("org.jetbrains.kotlin.android")) {
+    if (/plugins\s*\{/.test(rootText)) {
+      rootText = rootText.replace(/plugins\s*\{/, match => `${match}\n${rootPluginLine}`);
+    } else {
+      rootText = `plugins {\n${rootPluginLine}\n}\n\n${rootText}`;
+    }
+    fs.writeFileSync(rootGradle, rootText);
+  }
+
+  let appText = fs.readFileSync(appGradle, 'utf8');
+  if (!appText.includes("org.jetbrains.kotlin.android")) {
+    if (/plugins\s*\{/.test(appText)) {
+      appText = appText.replace(/plugins\s*\{/, match => `${match}\n    id 'org.jetbrains.kotlin.android'`);
+    } else {
+      appText = `apply plugin: 'org.jetbrains.kotlin.android'\n${appText}`;
+    }
+    fs.writeFileSync(appGradle, appText);
+  }
+}
+
+ensureKotlinGradlePlugin();
+
 console.log(`Native media plugins copied and registered in ${mainActivity}; media permissions declared.`);

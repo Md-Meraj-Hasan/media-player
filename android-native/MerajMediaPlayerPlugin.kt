@@ -135,9 +135,23 @@ class MerajMediaPlayerPlugin : Plugin() {
     @PluginMethod fun pause(call: PluginCall) = withController(call) { p -> p.pause(); call.resolve(JSObject().put("paused", true)) }
     @PluginMethod fun resume(call: PluginCall) = withController(call) { p -> p.play(); call.resolve(JSObject().put("playing", true)) }
     @PluginMethod fun seekTo(call: PluginCall) = withController(call) { p ->
-        val position = call.getLong("positionMs")
-        if (position == null || position < 0) call.reject("positionMs must be non-negative.")
-        else { val duration = p.duration; val target = if (duration > 0L) position.coerceIn(0L, duration) else position; p.seekTo(target); call.resolve(JSObject().put("positionMs", target).put("accepted", true)) }
+        // Capacitor may receive a JavaScript Number as Integer, Long, or Double.
+        // Parse all numeric representations so a valid slider position is not rejected.
+        val raw = call.data.opt("positionMs")
+        val position = when (raw) {
+            is Number -> raw.toDouble().takeIf { it.isFinite() }?.toLong()
+            is String -> raw.toDoubleOrNull()?.takeIf { it.isFinite() }?.toLong()
+            else -> null
+        }
+        if (position == null || position < 0L) {
+            call.reject("Invalid seek position: positionMs must be a non-negative number.")
+        } else {
+            val duration = p.duration
+            val target = if (duration > 0L) position.coerceIn(0L, duration) else position
+            android.util.Log.d("MerajMediaPlayer", "seekTo requested=$position target=$target duration=$duration seekable=${p.isCurrentMediaItemSeekable}")
+            p.seekTo(target)
+            call.resolve(JSObject().put("positionMs", target).put("accepted", true))
+        }
     }
 
     override fun handleOnDestroy() {

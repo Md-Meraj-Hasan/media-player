@@ -2,6 +2,8 @@ package com.meraj.mediaplayer
 
 import android.content.ComponentName
 import android.net.Uri
+import android.media.audiofx.Equalizer
+import androidx.media3.common.PlaybackParameters
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.MediaItem
@@ -23,6 +25,8 @@ class MerajMediaPlayerPlugin : Plugin() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     @Volatile private var controller: MediaController? = null
     private var listener: Player.Listener? = null
+    @Volatile private var audioSessionId: Int = 0
+    private var equalizer: Equalizer? = null
 
     override fun load() {
         super.load()
@@ -60,6 +64,7 @@ class MerajMediaPlayerPlugin : Plugin() {
                                 put("duration", (controller?.duration ?: 0L).coerceAtLeast(0L))
                             })
                         }
+                        override fun onAudioSessionIdChanged(audioSessionId: Int) { this@MerajMediaPlayerPlugin.audioSessionId=audioSessionId; resetEqualizer(audioSessionId) }
                     }
                     listener = l
                     c.addListener(l)
@@ -154,12 +159,37 @@ class MerajMediaPlayerPlugin : Plugin() {
         }
     }
 
+
+    private fun resetEqualizer(sessionId: Int) { try { equalizer?.release(); equalizer=null; if(sessionId>0) equalizer=Equalizer(0,sessionId).apply{enabled=true} } catch(e:Exception){ android.util.Log.w("MerajMediaPlayer","Equalizer unavailable",e) } }
+    @PluginMethod fun setPlaybackSpeed(call: PluginCall) = withController(call) { p ->
+        val speed=call.getDouble("speed")
+        if(speed==null || !speed.isFinite() || speed<0.5 || speed>1.5) call.reject("Playback speed must be between 0.5 and 1.5.")
+        else { p.setPlaybackParameters(PlaybackParameters(speed.toFloat(),1f)); call.resolve(JSObject().put("speed",speed).put("accepted",true)) }
+    }
+    @PluginMethod fun getEqualizerPresets(call: PluginCall) {
+        val arr=JSArray()
+        try { val eq=equalizer ?: if(audioSessionId>0) Equalizer(0,audioSessionId) else null
+            if(eq!=null){ for(i in 0 until eq.numberOfPresets){val n=eq.getPresetName(i.toShort()).toString();val k=n.lowercase().replace(Regex("[^a-z0-9]+"),"-").trim('-');arr.put(JSObject().put("key",k).put("name",n))};if(eq!==equalizer)eq.release() }
+        } catch(e:Exception){android.util.Log.w("MerajMediaPlayer","Equalizer presets unavailable",e)}
+        call.resolve(JSObject().put("presets",arr))
+    }
+    @PluginMethod fun setEqualizerPreset(call: PluginCall) {
+        val key=call.getString("preset"); if(key.isNullOrBlank()){call.reject("Preset required");return}
+        try { val eq=equalizer ?: if(audioSessionId>0) Equalizer(0,audioSessionId).also{equalizer=it} else null
+            if(eq==null){call.reject("Audio equalizer is not ready");return}
+            val i=(0 until eq.numberOfPresets).firstOrNull{eq.getPresetName(it.toShort()).toString().lowercase().replace(Regex("[^a-z0-9]+"),"-").trim('-')==key}
+            if(i==null){call.reject("Preset unavailable on this device");return};eq.usePreset(i.toShort());eq.enabled=true;call.resolve(JSObject().put("preset",key).put("accepted",true))
+        }catch(e:Exception){call.reject(e.message ?: "Equalizer unavailable")}
+    }
+
     override fun handleOnDestroy() {
         mainHandler.post {
             listener?.let { controller?.removeListener(it) }
             controllerFuture?.let { MediaController.releaseFuture(it) }
             controllerFuture = null
             controller = null
+            try { equalizer?.release() } catch (_: Exception) {}
+            equalizer = null
         }
         super.handleOnDestroy()
     }

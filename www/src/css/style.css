@@ -52,3 +52,20 @@ html,body{height:100%;overflow:hidden}body{background:radial-gradient(ellipse at
 
 /* Current track indication in every song list */
 .song.is-playing{background:linear-gradient(90deg,#342444,#211e34);outline:1px solid #8d59b6}.song.is-playing .songinfo b{color:#dba0ff}.playing-badge{display:inline-block;margin-left:6px;padding:2px 5px;border-radius:5px;background:#56336f;color:#f2d8ff;font-size:8px;letter-spacing:.5px;vertical-align:2px}.song.is-playing .art{box-shadow:0 0 0 2px #d18af7}.song.is-playing .songinfo small{color:#d2a8ee}
+
+/* Global theme coverage: all interface surfaces use the selected palette. */
+:root{--accent:#bd78f2;--accent2:#ed8ed7;--accent-soft:#302247;--accent-panel:#342444;--accent-border:#8d59b6;--control-fill:#bd78f2;--control-text:#171322}
+:root[data-theme="green"]{--accent:#35d399;--accent2:#8af0bd;--accent-soft:#10392d;--accent-panel:#164535;--accent-border:#268a66;--control-fill:#35d399;--control-text:#071b17}
+:root[data-theme="red"]{--accent:#ff526d;--accent2:#ff9aa8;--accent-soft:#451622;--accent-panel:#4a1c2a;--accent-border:#b8324c;--control-fill:#ff526d;--control-text:#200d13}
+input[type="range"]{accent-color:var(--accent);cursor:pointer;touch-action:pan-y}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.round,.searchbox button,.categories b,.sectionhead button,.nowmeta small,.welcome small,.pagetitle small,.equalizer,.controls button,.mini>button:not(.minitext),.more{color:var(--accent2)}
+.brandicon,.bigart,.miniart,.albumart{background:linear-gradient(135deg,var(--accent2),var(--accent),var(--accent-soft))}
+.categories button,.librarytiles button,.album,.nowextras button,.searchbox,.themebtn{border-color:var(--accent-border)}
+.categories b,.librarytiles button,.badge,.playing-badge{color:var(--accent2)}
+.badge{background:var(--accent-soft)}
+.controls .playbtn{background:var(--control-fill);color:var(--control-text);box-shadow:0 5px 22px #0003}
+.nowextras button{background:var(--panel);color:var(--accent2)}
+.mini{border-color:var(--accent-border);background:var(--panel)}
+.theme-option.selected{background:var(--accent-soft)}
+.toast{background:var(--accent2);color:var(--control-text)}

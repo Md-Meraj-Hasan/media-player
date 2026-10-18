@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];const audio=$('#audio');const NativePlayer=registerPlugin('MerajMediaPlayer');NativePlayer.addListener('trackChanged',ev=>{const idx=tracks.findIndex(t=>String(t.id||t.uri)===String(ev.mediaId));if(idx>=0){current=idx;nativePlayback=true;nativeEndedHandled=false;nativeIsPlaying=true;syncNow();}});let tracks=[],current=-1,favs=new Set(),shuffleMode=0,repeatMode=0,folderMode=false,nativeMode=false,nativePlayback=false,nativeIsPlaying=false,nativePosition=0,nativeDuration=0,nativeEndedHandled=false,historyPages=['home'],playbackSpeed=1,equalizerPreset='normal';const colors=['','c2','c3','c4'];
 // Premium color themes: saved locally on this device.
 const themeNames=['default','green','red'];
@@ -131,7 +132,18 @@ async function setEqualizerPreset(key){
   }
 }
 $$('[data-close-audio]').forEach(b=>b.onclick=closeAudioPopovers);document.addEventListener('click',e=>{if(!e.target.closest('.audio-popover')&&!e.target.closest('.audio-tool'))closeAudioPopovers()});syncSpeedUI();
-$('#likeNow').onclick=()=>{if(current<0)return;favs.has(current)?favs.delete(current):favs.add(current);renderAll();syncNow()};function renderFavorites(){fillList('#favoriteList',[...favs].filter(i=>tracks[i]))}function renderFolders(){let map={};tracks.forEach((t,i)=>{let f=t.path.includes('/')?t.path.split('/').slice(0,-1).join('/'):'Root / Selected files';(map[f]??=[]).push(i)});$('#folderList').innerHTML=Object.keys(map).length?Object.entries(map).map(([f,ids])=>`<div class="song"><div class="art">▣</div><button class="songinfo" data-folder="${esc(f)}"><b>${esc(f)}</b><small>${ids.length} audio file(s)</small></button></div><div class="nested" id="folder-${Object.keys(map).indexOf(f)}"></div>`).join(''):'<p class="muted">No folders loaded. Select a music folder using ↻.</p>';$$('[data-folder]').forEach((b,i)=>b.onclick=()=>{let ids=map[b.dataset.folder];$('#folder-'+i).innerHTML=ids.map(j=>songRow(tracks[j],j)).join('');bindRows()})}function renderAlbums(){let map={};tracks.forEach((t,i)=>(map[t.album]??=[]).push(i));$('#albumList').innerHTML=Object.keys(map).length?Object.entries(map).map(([name,ids],i)=>`<button class="album" data-album="${esc(name)}"><div class="albumart">♫</div><b>${esc(name)}</b><small>${ids.length} songs</small></button>`).join(''):'<p class="muted">Album details will appear when available in local music metadata.</p>';$$('[data-album]').forEach(b=>b.onclick=()=>{page('songs');fillList('#allSongs',map[b.dataset.album]);bindRows()})}function renderArtists(){let map={};tracks.forEach((t,i)=>(map[t.artist]??=[]).push(i));$('#artistList').innerHTML=Object.keys(map).length?Object.entries(map).map(([name,ids])=>`<div class="song"><div class="art">♙</div><button class="songinfo" data-artist="${esc(name)}"><b>${esc(name)}</b><small>${ids.length} songs</small></button></div>`).join(''):'<p class="muted">Artist names will appear when available in local music metadata.</p>';$$('[data-artist]').forEach(b=>b.onclick=()=>{page('songs');fillList('#allSongs',map[b.dataset.artist]);bindRows()})}function doSearch(q){let ids=tracks.map((t,i)=>({t,i})).filter(x=>(x.t.name+' '+x.t.artist+' '+x.t.path).toLowerCase().includes(q.toLowerCase())).map(x=>x.i);fillList('#searchResults',ids);bindRows()}$('#searchInput').oninput=e=>doSearch(e.target.value);$('#searchHome').oninput=e=>{page('search');$('#searchInput').value=e.target.value;doSearch(e.target.value)};
+$('#likeNow').onclick=()=>{if(current<0)return;favs.has(current)?favs.delete(current):favs.add(current);renderAll();syncNow()};function renderFavorites(){fillList('#favoriteList',[...favs].filter(i=>tracks[i]))}function renderFolders(){let map={};tracks.forEach((t,i)=>{let f=t.path.includes('/')?t.path.split('/').slice(0,-1).join('/'):'Root / Selected files';(map[f]??=[]).push(i)});$('#folderList').innerHTML=Object.keys(map).length?Object.entries(map).map(([f,ids])=>`<div class="song"><div class="art">▣</div><button class="songinfo" data-folder="${esc(f)}"><b>${esc(f)}</b><small>${ids.length} audio file(s)</small></button></div><div class="nested" id="folder-${Object.keys(map).indexOf(f)}"></div>`).join(''):'<p class="muted">No folders loaded. Select a music folder using ↻.</p>';$$('[data-folder]').forEach((b,i)=>b.onclick=()=>{let ids=map[b.dataset.folder];$('#folder-'+i).innerHTML=ids.map(j=>songRow(tracks[j],j)).join('');bindRows()})}function renderAlbums(){let map={};tracks.forEach((t,i)=>(map[t.album]??=[]).push(i));$('#albumList').innerHTML=Object.keys(map).length?Object.entries(map).map(([name,ids],i)=>`<button class="album" data-album="${esc(name)}"><div class="albumart">♫</div><b>${esc(name)}</b><small>${ids.length} songs</small></button>`).join(''):'<p class="muted">Album details will appear when available in local music metadata.</p>';$$('[data-album]').forEach(b=>b.onclick=()=>{page('songs');fillList('#allSongs',map[b.dataset.album]);bindRows()})}function renderArtists(){let map={};tracks.forEach((t,i)=>(map[t.artist]??=[]).push(i));$('#artistList').innerHTML=Object.keys(map).length?Object.entries(map).map(([name,ids])=>`<div class="song"><div class="art">♙</div><button class="songinfo" data-artist="${esc(name)}"><b>${esc(name)}</b><small>${ids.length} songs</small></button></div>`).join(''):'<p class="muted">Artist names will appear when available in local music metadata.</p>';$$('[data-artist]').forEach(b=>b.onclick=()=>{page('songs');fillList('#allSongs',map[b.dataset.artist]);bindRows()})}function doSearch(q){let ids=tracks.map((t,i)=>({t,i})).filter(x=>(x.t.name+' '+x.t.artist+' '+x.t.path).toLowerCase().includes(q.toLowerCase())).map(x=>x.i);fillList('#searchResults',ids);bindRows()}$$('.searchbox button[data-page="search"]').forEach(b=>{b.removeAttribute('data-page');b.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();$('#searchHome').focus();},true)});$('#searchHome').oninput=e=>{
+  const q=e.target.value.trim();
+  const recentHead=$('#homeRecentTitle');
+  if(q){
+    const ids=tracks.map((t,i)=>({t,i})).filter(x=>(x.t.name+' '+x.t.artist+' '+x.t.path).toLowerCase().includes(q.toLowerCase())).map(x=>x.i);
+    recentHead.textContent='Search results';
+    fillList('#recent',ids); bindRows();
+  } else {
+    recentHead.textContent='Recently added';
+    fillList('#recent',tracks.map((_,i)=>i).slice(-5).reverse());bindRows();
+  }
+};
 function syncTimeline(){const pos=nativePlayback?nativePosition:audio.currentTime;const dur=nativePlayback?nativeDuration:audio.duration;if(dur>0){if(!seekDragging)$('#seek').value=Math.min(1000,Math.max(0,pos/dur*1000));$('#elapsed').textContent=fmt(pos);$('#duration').textContent=fmt(dur)}}
 async function pollNativeState(){if(!nativePlayback)return;try{const st=await NativePlayer.getState();nativeIsPlaying=!!st.isPlaying;if(Date.now()>=seekSyncHoldUntil){nativePosition=Math.max(0,Number(st.position||0)/1000)}nativeDuration=Math.max(0,Number(st.duration||0)/1000);syncTimeline();syncNow();if(Number(st.playbackState)!==4){nativeEndedHandled=false}else if(repeatMode===1&&!nativeEndedHandled){nativeEndedHandled=true;step(1)}}catch(e){console.error('Native playback state check failed',e)}}
 setInterval(()=>{if(nativePlayback)pollNativeState()},500);
@@ -154,4 +166,154 @@ async function scanAndroidLibrary(){
  return true;
 }
 $('#scan').onclick=async()=>{if(nativeMode){await scanAndroidLibrary();return;}$('#folderPicker').click()};
-(async()=>{if(Capacitor.isNativePlatform()){await scanAndroidLibrary()}else{renderAll();}})();
+(async()=>{if(Capacitor.isNativePlatform()){await scanAndroidLibrary()}
+// ---------- Offline MP3 Tools: local decode/process/export only; no network requests ----------
+const MP3_TOOL_INFO={
+ cut:{title:'MP3 Cutter',desc:'Choose one audio file, set the start/end time, preview the range, then export the selected part as WAV.'},
+ merge:{title:'MP3 Merger',desc:'Select two or more local audio files. They are joined in the order shown in the file picker and exported as WAV.'},
+ convert:{title:'Audio Converter',desc:'Convert a supported local audio file to uncompressed WAV. WAV is used because this offline build has no bundled MP3 encoder.'},
+ volume:{title:'Volume / Normalize',desc:'Normalize the audio peak to a safe target level, or apply a gain adjustment, then export as WAV.'},
+ tags:{title:'MP3 Tag Editor',desc:'Edit ID3 title, artist and album tags in an MP3 file. The original MP3 is preserved and a new tagged copy is saved.'},
+ fade:{title:'Fade In / Out',desc:'Apply fade-in and fade-out to a local audio file, then export as WAV.'}
+};
+let activeMP3Tool='',selectedToolFiles=[];
+function toolEl(id){return document.getElementById(id)}
+function openMP3Tool(key){
+  activeMP3Tool=key;selectedToolFiles=[];
+  const info=MP3_TOOL_INFO[key];toolEl('toolModalTitle').textContent=info.title;
+  toolEl('toolDescription').textContent=info.desc;toolEl('toolFileLabel').textContent=key==='merge'?'Choose 2 or more audio files':key==='tags'?'Choose one MP3 file':'Choose audio file';
+  toolEl('toolFileNames').textContent='No files selected';toolEl('toolFiles').value='';
+  toolEl('toolStatus').textContent='';toolEl('toolOptions').innerHTML=buildToolOptions(key);
+  toolEl('runTool').textContent=key==='tags'?'Save tagged MP3 copy':'Process and save new file';
+  toolEl('runTool').disabled=false;toolEl('toolModal').hidden=false;
+}
+function buildToolOptions(key){
+  if(key==='cut')return '<div class="tool-field-row"><label>Start (seconds)<input id="cutStart" type="number" min="0" step="0.1" value="0"></label><label>End (seconds)<input id="cutEnd" type="number" min="0.1" step="0.1" value="30"></label></div><p class="tool-hint">Times are in seconds. End must be greater than start.</p>';
+  if(key==='volume')return '<label class="tool-field">Loudness mode<select id="volumeMode"><option value="normalize">Normalize peak (recommended)</option><option value="gain">Manual gain</option></select></label><label class="tool-field">Gain / target dB<input id="volumeDb" type="number" min="-12" max="12" step="1" value="0"></label>';
+  if(key==='fade')return '<div class="tool-field-row"><label>Fade in (seconds)<input id="fadeIn" type="number" min="0" step="0.1" value="2"></label><label>Fade out (seconds)<input id="fadeOut" type="number" min="0" step="0.1" value="3"></label></div>';
+  if(key==='tags')return '<label class="tool-field">Title<input id="tagTitle" type="text" maxlength="200" placeholder="Song title"></label><label class="tool-field">Artist<input id="tagArtist" type="text" maxlength="200" placeholder="Artist"></label><label class="tool-field">Album<input id="tagAlbum" type="text" maxlength="200" placeholder="Album"></label><p class="tool-hint">ID3v2.3 text tags only. Artwork is not changed.</p>';
+  if(key==='merge')return '<p class="tool-hint">Files are joined in picker order. Different sample rates are converted to a common WAV sample rate during export.</p>';
+  return '<p class="tool-hint">Output: WAV (44.1 kHz PCM). Processing runs locally on this device.</p>';
+}
+toolEl('closeToolModal').onclick=()=>toolEl('toolModal').hidden=true;
+toolEl('toolModal').addEventListener('click',e=>{if(e.target===toolEl('toolModal'))toolEl('toolModal').hidden=true;});
+document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>openMP3Tool(b.dataset.tool)));
+toolEl('toolFiles').addEventListener('change',()=>{
+  selectedToolFiles=[...toolEl('toolFiles').files];
+  toolEl('toolFileNames').textContent=selectedToolFiles.length?selectedToolFiles.map(f=>f.name).join(', '):'No files selected';
+  if(activeMP3Tool==='cut'&&selectedToolFiles[0]) {
+    const a=document.createElement('audio');a.preload='metadata';a.src=URL.createObjectURL(selectedToolFiles[0]);
+    a.onloadedmetadata=()=>{const end=toolEl('cutEnd');if(end&&Number(end.value)===30&&Number.isFinite(a.duration))end.value=Math.max(.1,a.duration.toFixed(1));URL.revokeObjectURL(a.src);};
+  }
+  if(activeMP3Tool==='tags'&&selectedToolFiles[0]){
+    const n=selectedToolFiles[0].name.replace(/\.[^.]+$/,'');
+    if(!toolEl('tagTitle').value)toolEl('tagTitle').value=n;
+  }
+});
+function toolStatus(msg){toolEl('toolStatus').textContent=msg}
+function audioContextForTools(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error('Audio decoding is not supported on this device.');return new AC()}
+async function decodeToolFile(file,ctx){
+  const ab=await file.arrayBuffer();
+  try{return await ctx.decodeAudioData(ab.slice(0));}
+  catch(e){throw new Error('Cannot decode "'+file.name+'". This format may not be supported by Android WebView.');}
+}
+function createAudioBufferFromChannels(channels,sampleRate){
+  const length=channels[0]?.length||0;
+  const AC=window.AudioContext||window.webkitAudioContext;
+  const ctx=new AC({sampleRate});
+  const b=ctx.createBuffer(channels.length,length,sampleRate);
+  channels.forEach((ch,i)=>b.copyToChannel(ch, i));
+  ctx.close();return b;
+}
+function audioBufferToWav(buffer){
+  const channels=buffer.numberOfChannels,rate=buffer.sampleRate,length=buffer.length;
+  const bytes=44+length*channels*2,ab=new ArrayBuffer(bytes),v=new DataView(ab);
+  const write=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
+  write(0,'RIFF');v.setUint32(4,bytes-8,true);write(8,'WAVE');write(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,channels,true);v.setUint32(24,rate,true);v.setUint32(28,rate*channels*2,true);v.setUint16(32,channels*2,true);v.setUint16(34,16,true);write(36,'data');v.setUint32(40,bytes-44,true);
+  let offset=44;
+  for(let i=0;i<length;i++)for(let c=0;c<channels;c++){let s=Math.max(-1,Math.min(1,buffer.getChannelData(c)[i]));v.setInt16(offset,s<0?s*32768:s*32767,true);offset+=2;}
+  return new Blob([ab],{type:'audio/wav'});
+}
+function concatAudioBuffers(buffers){
+  const rate=44100,channels=Math.max(...buffers.map(b=>Math.min(2,b.numberOfChannels)));
+  const parts=buffers.map(b=>{
+    const len=Math.ceil(b.duration*rate),out=Array.from({length:channels},()=>new Float32Array(len));
+    for(let c=0;c<channels;c++){const src=b.getChannelData(Math.min(c,b.numberOfChannels-1));for(let i=0;i<len;i++){const pos=i*b.sampleRate/rate,lo=Math.floor(pos),hi=Math.min(src.length-1,lo+1),f=pos-lo;out[c][i]=(src[lo]||0)*(1-f)+(src[hi]||0)*f;}}
+    return out;
+  });
+  const joined=Array.from({length:channels},(_,c)=>{const out=new Float32Array(parts.reduce((n,p)=>n+p[c].length,0));let off=0;for(const p of parts){out.set(p[c],off);off+=p[c].length;}return out;});
+  const AC=window.AudioContext||window.webkitAudioContext,ctx=new AC({sampleRate:rate}),buf=ctx.createBuffer(channels,joined[0].length,rate);joined.forEach((x,c)=>buf.copyToChannel(x,c));ctx.close();return buf;
+}
+function processBuffer(buffer,mode){
+  const channels=Array.from({length:buffer.numberOfChannels},(_,i)=>new Float32Array(buffer.getChannelData(i)));
+  if(mode==='volume'){
+    const db=Number(toolEl('volumeDb').value||0),m=toolEl('volumeMode').value;
+    let peak=0;channels.forEach(ch=>ch.forEach(x=>peak=Math.max(peak,Math.abs(x))));
+    const gain=m==='normalize'?(peak>0?Math.pow(10,Math.min(0.0,db)/20)/peak:1):Math.pow(10,Math.max(-12,Math.min(12,db))/20);
+    channels.forEach(ch=>{for(let i=0;i<ch.length;i++)ch[i]=Math.max(-1,Math.min(1,ch[i]*gain));});
+  }
+  if(mode==='fade'){
+    const fi=Math.max(0,Number(toolEl('fadeIn').value||0)),fo=Math.max(0,Number(toolEl('fadeOut').value||0)),dur=buffer.duration;
+    if(fi+fo>dur)throw new Error('Fade in plus fade out must not exceed the audio duration.');
+    channels.forEach(ch=>{for(let i=0;i<ch.length;i++){const t=i/buffer.sampleRate;let g=1;if(fi>0&&t<fi)g=Math.min(g,t/fi);if(fo>0&&t>dur-fo)g=Math.min(g,(dur-t)/fo);ch[i]*=Math.max(0,g);}});
+  }
+  const AC=window.AudioContext||window.webkitAudioContext,ctx=new AC({sampleRate:buffer.sampleRate}),out=ctx.createBuffer(channels.length,channels[0].length,buffer.sampleRate);channels.forEach((ch,i)=>out.copyToChannel(ch,i));ctx.close();return out;
+}
+function cropBuffer(buffer,start,end){
+  const a=Math.max(0,Math.floor(start*buffer.sampleRate)),b=Math.min(buffer.length,Math.floor(end*buffer.sampleRate));
+  if(b<=a)throw new Error('End time must be greater than start time.');
+  const AC=window.AudioContext||window.webkitAudioContext,ctx=new AC({sampleRate:buffer.sampleRate}),out=ctx.createBuffer(buffer.numberOfChannels,b-a,buffer.sampleRate);
+  for(let c=0;c<buffer.numberOfChannels;c++)out.copyToChannel(buffer.getChannelData(c).slice(a,b),c);ctx.close();return out;
+}
+function id3TextFrame(id,text){
+  const data=new TextEncoder().encode('\x03'+text),frame=new Uint8Array(10+data.length),v=new DataView(frame.buffer);
+  for(let i=0;i<4;i++)frame[i]=id.charCodeAt(i);v.setUint32(4,data.length,false);frame.set(data,10);return frame;
+}
+function synchsafe(n){return [(n>>21)&127,(n>>14)&127,(n>>7)&127,n&127]}
+function makeTaggedMp3(file,title,artist,album){
+  const ext=file.name.toLowerCase();if(!ext.endsWith('.mp3'))throw new Error('MP3 Tag Editor currently supports .mp3 files only.');
+  const frames=[['TIT2',title],['TPE1',artist],['TALB',album]].filter(x=>x[1].trim()).map(x=>id3TextFrame(x[0],x[1]));
+  const size=frames.reduce((n,x)=>n+x.length,0),header=new Uint8Array(10);header.set([73,68,51,3,0,0,...synchsafe(size)]);
+  return file.arrayBuffer().then(ab=>new Blob([header,...frames,ab],{type:'audio/mpeg'}));
+}
+function safeFilename(s){return (s||'audio').replace(/\.[^.]+$/,'').replace(/[\\/:*?"<>|]+/g,'_').trim().slice(0,100)||'audio'}
+async function saveToolBlob(blob,filename){
+  if(Capacitor.isNativePlatform()){
+    const bytes=new Uint8Array(await blob.arrayBuffer());let bin='';const step=0x8000;for(let i=0;i<bytes.length;i+=step)bin+=String.fromCharCode(...bytes.subarray(i,Math.min(i+step,bytes.length)));
+    const base64=btoa(bin);
+    const result=await Filesystem.writeFile({path:'MerajMusic/MP3Tools/'+filename,data:base64,directory:Directory.Documents,recursive:true});
+    return 'Saved to Documents/MerajMusic/MP3Tools/'+filename;
+  }
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);return 'Download started: '+filename;
+}
+toolEl('runTool').addEventListener('click',async()=>{
+  const key=activeMP3Tool,files=selectedToolFiles.slice();
+  if(!files.length){toolStatus('Please choose an audio file first.');return;}
+  if(key==='merge'&&files.length<2){toolStatus('Select at least two audio files to merge.');return;}
+  if(key!=='merge'&&files.length>1&&key!=='tags'){toolStatus('Please select one file for this tool.');return;}
+  if(key==='tags'&&files.length!==1){toolStatus('Select one MP3 file.');return;}
+  toolEl('runTool').disabled=true;toolStatus('Processing offline…');
+  try{
+    let blob,name;
+    if(key==='tags'){
+      blob=await makeTaggedMp3(files[0],toolEl('tagTitle').value,toolEl('tagArtist').value,toolEl('tagAlbum').value);
+      name=safeFilename(toolEl('tagTitle').value||files[0].name)+'-tagged.mp3';
+    }else{
+      const ctx=audioContextForTools();let buffers=[];
+      try{for(const f of files)buffers.push(await decodeToolFile(f,ctx));}finally{await ctx.close();}
+      let output;
+      if(key==='cut'){
+        const start=Number(toolEl('cutStart').value||0),end=Number(toolEl('cutEnd').value||0);
+        if(start<0||end<=start||end>buffers[0].duration)throw new Error('Choose valid start/end times. File duration: '+buffers[0].duration.toFixed(2)+' seconds.');
+        output=cropBuffer(buffers[0],start,end);
+      }else if(key==='merge')output=concatAudioBuffers(buffers);
+      else if(key==='volume'||key==='fade')output=processBuffer(buffers[0],key);
+      else output=buffers[0];
+      blob=audioBufferToWav(output);
+      name=safeFilename(files[0].name)+(key==='merge'?'-merged':key==='cut'?'-cut':key==='volume'?'-normalized':key==='fade'?'-faded':'-converted')+'.wav';
+    }
+    const msg=await saveToolBlob(blob,name);toolStatus(msg+'. Original file was not changed.');
+  }catch(e){console.error('MP3 Tools processing failed',e);toolStatus(e.message||'Could not process this audio file.');}
+  finally{toolEl('runTool').disabled=false;}
+});
+renderAll();})();

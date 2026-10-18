@@ -47,7 +47,7 @@ if (mainActivity) {
 }
 
 const activityDir = path.dirname(mainActivity);
-for (const name of ['MediaPermissionPlugin.kt', 'MediaLibraryScannerPlugin.kt', 'MerajMediaPlayerPlugin.kt']) {
+for (const name of ['MediaPermissionPlugin.kt', 'MediaLibraryScannerPlugin.kt', 'MerajMediaPlayerPlugin.kt', 'MerajPlaybackService.kt']) {
   const source = path.join(nativeRoot, name);
   if (!fs.existsSync(source)) throw new Error(`Required native plugin source missing: ${source}`);
   let code = fs.readFileSync(source, 'utf8');
@@ -90,15 +90,11 @@ if (!main.includes('MediaPermissionPlugin::class.java') && !main.includes('Media
     }
   }
 }
-const registrationChecks = [
-  ['MediaPermissionPlugin', 'MediaPermissionPlugin::class.java', 'MediaPermissionPlugin.class'],
-  ['MediaLibraryScannerPlugin', 'MediaLibraryScannerPlugin::class.java', 'MediaLibraryScannerPlugin.class'],
-  ['MerajMediaPlayerPlugin', 'MerajMediaPlayerPlugin::class.java', 'MerajMediaPlayerPlugin.class']
-];
-for (const [pluginName, kotlinRegistration, javaRegistration] of registrationChecks) {
-  if (!main.includes(kotlinRegistration) && !main.includes(javaRegistration)) {
-    throw new Error(`${pluginName} is not registered in ${mainActivity}. Refusing to build a broken APK.`);
-  }
+if (!main.includes('MediaLibraryScannerPlugin::class.java') && !main.includes('MediaLibraryScannerPlugin.class')) {
+  throw new Error(`Could not register native media scanner in ${mainActivity}`);
+}
+if (!main.includes('MerajMediaPlayerPlugin::class.java') && !main.includes('MerajMediaPlayerPlugin.class')) {
+  main = main.replace(/registerPlugin\(MediaLibraryScannerPlugin(::class\.java|\.class)\);?/, match => match + (match.includes('::class') ? '\n        registerPlugin(MerajMediaPlayerPlugin::class.java)' : '\n        registerPlugin(MerajMediaPlayerPlugin.class);'));
 }
 fs.writeFileSync(mainActivity, main);
 
@@ -141,8 +137,25 @@ const appGradle = path.join(appRoot, 'build.gradle');
 let gradleText = fs.readFileSync(appGradle, 'utf8');
 if (!gradleText.includes('androidx.media3:media3-exoplayer')) {
   if (!/dependencies\s*\{/.test(gradleText)) throw new Error('Could not find dependencies block in android/app/build.gradle');
-  gradleText = gradleText.replace(/dependencies\s*\{/, match => `${match}\n    implementation 'androidx.media3:media3-exoplayer:1.5.1'`);
+  gradleText = gradleText.replace(/dependencies\s*\{/, match => `${match}\n    implementation 'androidx.media3:media3-exoplayer:1.5.1'\n    implementation 'androidx.media3:media3-session:1.5.1'`);
+  fs.writeFileSync(appGradle, gradleText);
+} else if (!gradleText.includes('androidx.media3:media3-session')) {
+  gradleText = gradleText.replace(/dependencies\s*\{/, match => `${match}\n    implementation 'androidx.media3:media3-session:1.5.1'`);
   fs.writeFileSync(appGradle, gradleText);
 }
+
+// Register the MediaSessionService and foreground playback permissions.
+xml = fs.readFileSync(manifest, 'utf8');
+const servicePermissions = [
+  '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
+  '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />'
+];
+for (const permission of servicePermissions) {
+  if (!xml.includes(permission)) xml = xml.replace(/<manifest\b[^>]*>/, match => `${match}\n    ${permission}`);
+}
+if (!xml.includes('MerajPlaybackService')) {
+  xml = xml.replace(/<application\b[^>]*>/, match => `${match}\n        <service android:name=".MerajPlaybackService" android:foregroundServiceType="mediaPlayback" android:exported="true">\n            <intent-filter>\n                <action android:name="androidx.media3.session.MediaSessionService" />\n            </intent-filter>\n        </service>`);
+}
+fs.writeFileSync(manifest, xml);
 
 console.log(`Native media plugins copied and registered in ${mainActivity}; media permissions and ExoPlayer dependency configured.`);

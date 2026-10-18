@@ -9,3 +9,8 @@ This folder contains the native Android media permission, scanner and audio play
 - The current HTML player remains the fallback for browser-supported formats.
 
 The GitHub Actions workflow performs plugin copy/registration and adds the Media3 dependency. Verify playback on a physical Android phone before release.
+
+
+## Background playback and notification
+
+`MerajPlaybackService.kt` owns the ExoPlayer instance through Media3 `MediaSessionService`. Android can show its media notification and Play/Pause/Next controls while the app is backgrounded. The native plugin sends the local audio queue to the session so track transitions can advance automatically. The GitHub Actions build must be run and tested on a physical Android device; this source package has not been device-tested.

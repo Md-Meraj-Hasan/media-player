@@ -50,8 +50,24 @@ html,body{height:100%;overflow:hidden}body{background:radial-gradient(ellipse at
 .muted{line-height:1.5}
 @media(min-width:600px){body{padding:0}.app{border:0;border-radius:0;min-height:0;height:100dvh}.bottom{bottom:0;border-radius:18px 18px 0 0}.mini{bottom:78px}}
 
+/* Compact home layout: remove decorative hero to give the song list more room */
+#home .searchbox{margin-top:2px;margin-bottom:6px}
+#home .sectionhead{margin:10px 0 8px}
+#home .categories button{min-height:76px}
+
 /* Current track indication in every song list */
 .song.is-playing{background:linear-gradient(90deg,#342444,#211e34);outline:1px solid #8d59b6}.song.is-playing .songinfo b{color:#dba0ff}.playing-badge{display:inline-block;margin-left:6px;padding:2px 5px;border-radius:5px;background:#56336f;color:#f2d8ff;font-size:8px;letter-spacing:.5px;vertical-align:2px}.song.is-playing .art{box-shadow:0 0 0 2px #d18af7}.song.is-playing .songinfo small{color:#d2a8ee}
+
+
+/* Premium selectable themes */
+:root{--accent:#bd78f2;--accent2:#ed8ed7;--accent-soft:#302247;--accent-panel:#342444;--accent-border:#8d59b6;--top-bg:#10101cef;--nav-bg:#171725f7}
+:root[data-theme="green"]{--bg:#071b17;--panel:#102923;--panel2:#173a30;--purple:#55e0a0;--pink:#91f2c5;--accent:#35d399;--accent2:#8af0bd;--accent-soft:#10392d;--accent-panel:#164535;--accent-border:#268a66;--top-bg:#071b17ef;--nav-bg:#0c241ef7}
+:root[data-theme="red"]{--bg:#1c0b10;--panel:#2a1119;--panel2:#3a1722;--purple:#ff5d78;--pink:#ff9aa8;--accent:#ff526d;--accent2:#ff9aa8;--accent-soft:#451622;--accent-panel:#4a1c2a;--accent-border:#b8324c;--top-bg:#1c0b10ef;--nav-bg:#260e16f7}
+body{background:radial-gradient(ellipse at 80% 0,var(--accent-soft) 0,transparent 38%),var(--bg)}
+.top{background:var(--top-bg)}.bottom{background:var(--nav-bg)}
+.brand span span{color:var(--accent)}.nav.active b{background:var(--accent-soft);color:var(--accent2)}.nav.active{color:var(--accent2)}
+.song.is-playing{background:linear-gradient(90deg,var(--accent-panel),var(--panel));outline-color:var(--accent-border)}.song.is-playing .songinfo b{color:var(--accent2)}.playing-badge{background:var(--accent-panel);color:var(--text)}.song.is-playing .art{box-shadow:0 0 0 2px var(--accent)}.song.is-playing .songinfo small{color:var(--accent2)}
+.topactions{display:flex;align-items:center;gap:9px}.themebtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-width:42px;height:42px;border-radius:13px;background:var(--panel);color:var(--accent2);font-size:20px}.themebtn small,.scanbtn small{font-size:9px;line-height:1.2}.theme-popover{position:absolute;right:12px;top:60px;z-index:20;width:218px;padding:10px;border:1px solid var(--accent-border);border-radius:17px;background:var(--panel);box-shadow:0 16px 45px #0008;backdrop-filter:blur(18px)}.theme-popover[hidden]{display:none}.theme-popover-title{padding:5px 7px 9px;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}.theme-option{display:flex;align-items:center;gap:10px;width:100%;padding:10px 8px;text-align:left;border-radius:12px;background:transparent}.theme-option:active,.theme-option.selected{background:var(--accent-soft)}.theme-option>span:nth-child(2){display:flex;flex:1;flex-direction:column;gap:2px}.theme-option b{font-size:13px}.theme-option small{font-size:10px;color:var(--muted)}.theme-check{opacity:0;color:var(--accent2);font-weight:900}.theme-option.selected .theme-check{opacity:1}.theme-swatch{width:29px;height:29px;border-radius:10px;border:2px solid #ffffff30}.swatch-default{background:linear-gradient(135deg,#bd78f2,#3478ff)}.swatch-green{background:linear-gradient(135deg,#35d399,#a7f3d0)}.swatch-red{background:linear-gradient(135deg,#ff526d,#ffb1a8)}
 
 /* Global theme coverage: all interface surfaces use the selected palette. */
 :root{--accent:#bd78f2;--accent2:#ed8ed7;--accent-soft:#302247;--accent-panel:#342444;--accent-border:#8d59b6;--control-fill:#bd78f2;--control-text:#171322}
@@ -69,3 +85,6 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 .mini{border-color:var(--accent-border);background:var(--panel)}
 .theme-option.selected{background:var(--accent-soft)}
 .toast{background:var(--accent2);color:var(--control-text)}
+
+/* Player screen: compact portrait layout, clear mode states and reliable touch seeking. */
+.nowpage{min-height:0;padding-bottom:10px}.bigart{width:min(58vw,250px);margin:2px auto 15px;border-radius:26px;font-size:86px}.nowmeta h1{font-size:clamp(20px,5.3vw,25px);line-height:1.16;margin:7px 0 8px;overflow-wrap:anywhere}.nowmeta p{font-size:13px;overflow-wrap:anywhere}.timeline{gap:8px;margin:17px 0 12px;font-size:11px}.timeline span{min-width:36px;text-align:center}#seek{height:28px;padding:0;touch-action:pan-y;cursor:pointer;accent-color:#ff526f}.controls{gap:2px}.controls button{padding:7px 5px;min-width:40px}.controls .playbtn{width:58px;height:58px;min-width:58px;background:#ff526f;color:#fff}.controls .mode-control{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:68px;border-radius:13px;padding:7px 4px;color:#c88cff}.mode-control .mode-icon{font-size:23px;line-height:1}.mode-control small{font-size:9px;line-height:1.15;color:var(--muted);white-space:nowrap}.mode-control.mode-active{background:#392033;box-shadow:inset 0 0 0 1px #ff526f;color:#ff91aa!important}.mode-control.mode-active small{color:#ffb2c0}.mode-control.repeat-one .mode-icon:after{content:'1';font-size:10px;font-weight:900;vertical-align:top;margin-left:-5px}.nowextras{margin:15px 0 8px;gap:9px}.nowextras button{padding:9px 10px;font-size:11px}.back{display:none}@media(max-height:800px){.bigart{width:min(48vw,205px);margin:0 auto 10px;font-size:72px}.nowmeta h1{font-size:20px}.timeline{margin:12px 0 8px}.controls button{padding:5px 3px}.controls .playbtn{width:52px;height:52px;min-width:52px}.nowextras{margin:10px 0 5px}}

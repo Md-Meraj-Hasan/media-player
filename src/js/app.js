@@ -265,16 +265,38 @@ function cropBuffer(buffer,start,end){
   const AC=window.AudioContext||window.webkitAudioContext,ctx=new AC({sampleRate:buffer.sampleRate}),out=ctx.createBuffer(buffer.numberOfChannels,b-a,buffer.sampleRate);
   for(let c=0;c<buffer.numberOfChannels;c++)out.copyToChannel(buffer.getChannelData(c).slice(a,b),c);ctx.close();return out;
 }
-function id3TextFrame(id,text){
-  const data=new TextEncoder().encode('\x03'+text),frame=new Uint8Array(10+data.length),v=new DataView(frame.buffer);
-  for(let i=0;i<4;i++)frame[i]=id.charCodeAt(i);v.setUint32(4,data.length,false);frame.set(data,10);return frame;
-}
 function synchsafe(n){return [(n>>21)&127,(n>>14)&127,(n>>7)&127,n&127]}
-function makeTaggedMp3(file,title,artist,album){
-  const ext=file.name.toLowerCase();if(!ext.endsWith('.mp3'))throw new Error('MP3 Tag Editor currently supports .mp3 files only.');
-  const frames=[['TIT2',title],['TPE1',artist],['TALB',album]].filter(x=>x[1].trim()).map(x=>id3TextFrame(x[0],x[1]));
-  const size=frames.reduce((n,x)=>n+x.length,0),header=new Uint8Array(10);header.set([73,68,51,3,0,0,...synchsafe(size)]);
-  return file.arrayBuffer().then(ab=>new Blob([header,...frames,ab],{type:'audio/mpeg'}));
+function id3TextFrame(id,text){
+  // ID3v2.4 supports UTF-8 text (encoding byte 0x03) and synchsafe frame sizes.
+  const data=new TextEncoder().encode('\x03'+text),frame=new Uint8Array(10+data.length);
+  for(let i=0;i<4;i++)frame[i]=id.charCodeAt(i);
+  frame.set(synchsafe(data.length),4);
+  frame[8]=0; frame[9]=0;
+  frame.set(data,10);
+  return frame;
+}
+function stripExistingId3Tags(input){
+  let start=0,end=input.length;
+  // Remove an existing ID3v2 tag before writing the replacement, avoiding stacked tags.
+  if(end>=10&&input[0]===0x49&&input[1]===0x44&&input[2]===0x33){
+    const size=((input[6]&0x7f)<<21)|((input[7]&0x7f)<<14)|((input[8]&0x7f)<<7)|(input[9]&0x7f);
+    const total=Math.min(end,10+size);
+    if(total>=10)start=total;
+  }
+  // Remove an ID3v1 128-byte trailer if present; new metadata is stored in ID3v2.4.
+  if(end-start>=128&&input[end-128]===0x54&&input[end-127]===0x41&&input[end-126]===0x47)end-=128;
+  if(start>=end)throw new Error('This MP3 file has no audio data after its metadata.');
+  return input.slice(start,end);
+}
+async function makeTaggedMp3(file,title,artist,album){
+  if(!file.name.toLowerCase().endsWith('.mp3'))throw new Error('MP3 Tag Editor currently supports .mp3 files only.');
+  const frames=[['TIT2',title],['TPE1',artist],['TALB',album]].filter(x=>String(x[1]||'').trim()).map(x=>id3TextFrame(x[0],String(x[1])));
+  const size=frames.reduce((n,x)=>n+x.length,0),header=new Uint8Array(10);
+  // ID3v2.4 header: UTF-8 text frames and syncsafe tag size.
+  header.set([0x49,0x44,0x33,4,0,0,...synchsafe(size)]);
+  const original=new Uint8Array(await file.arrayBuffer());
+  const audio=stripExistingId3Tags(original);
+  return new Blob([header,...frames,audio],{type:'audio/mpeg'});
 }
 function safeFilename(s){return (s||'audio').replace(/\.[^.]+$/,'').replace(/[\\/:*?"<>|]+/g,'_').trim().slice(0,100)||'audio'}
 async function saveToolBlob(blob,filename){

@@ -88,3 +88,23 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 
 /* Player screen: compact portrait layout, clear mode states and reliable touch seeking. */
 .nowpage{min-height:0;padding-bottom:10px}.bigart{width:min(58vw,250px);margin:2px auto 15px;border-radius:26px;font-size:86px}.nowmeta h1{font-size:clamp(20px,5.3vw,25px);line-height:1.16;margin:7px 0 8px;overflow-wrap:anywhere}.nowmeta p{font-size:13px;overflow-wrap:anywhere}.timeline{gap:8px;margin:17px 0 12px;font-size:11px}.timeline span{min-width:36px;text-align:center}#seek{height:28px;padding:0;touch-action:pan-y;cursor:pointer;accent-color:#ff526f}.controls{gap:2px}.controls button{padding:7px 5px;min-width:40px}.controls .playbtn{width:58px;height:58px;min-width:58px;background:#ff526f;color:#fff}.controls .mode-control{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:68px;border-radius:13px;padding:7px 4px;color:#c88cff}.mode-control .mode-icon{font-size:23px;line-height:1}.mode-control small{font-size:9px;line-height:1.15;color:var(--muted);white-space:nowrap}.mode-control.mode-active{background:#392033;box-shadow:inset 0 0 0 1px #ff526f;color:#ff91aa!important}.mode-control.mode-active small{color:#ffb2c0}.mode-control.repeat-one .mode-icon:after{content:'1';font-size:10px;font-weight:900;vertical-align:top;margin-left:-5px}.nowextras{margin:15px 0 8px;gap:9px}.nowextras button{padding:9px 10px;font-size:11px}.back{display:none}@media(max-height:800px){.bigart{width:min(48vw,205px);margin:0 auto 10px;font-size:72px}.nowmeta h1{font-size:20px}.timeline{margin:12px 0 8px}.controls button{padding:5px 3px}.controls .playbtn{width:52px;height:52px;min-width:52px}.nowextras{margin:10px 0 5px}}
+
+/* Player page uses the available viewport without colliding with the bottom navigation. */
+#pages{padding-bottom:calc(104px + env(safe-area-inset-bottom));}
+.page.active{flex:1;}
+#now.nowpage{flex:1;min-height:0;justify-content:space-evenly;gap:clamp(7px,1.4vh,18px);padding:4px 0 8px;overflow-y:auto!important;overscroll-behavior:contain;}
+#now .bigart{flex:0 0 auto;width:min(68vw,320px);max-width:100%;aspect-ratio:1;margin:0 auto;border-radius:28px;font-size:clamp(88px,20vw,116px);}
+#now .nowmeta{flex:0 0 auto;width:100%;}
+#now .nowmeta h1{font-size:clamp(23px,6.1vw,29px);line-height:1.13;margin:9px 0 10px;}
+#now .nowmeta p{font-size:clamp(13px,3.8vw,16px);}
+#now .timeline{flex:0 0 auto;margin:0;gap:9px;font-size:12px;}
+#now #seek{height:34px;min-width:0;touch-action:pan-y;}
+#now .controls{flex:0 0 auto;gap:clamp(2px,1vw,8px);}
+#now .controls button{padding:8px 4px;min-width:42px;font-size:clamp(22px,6vw,27px);}
+#now .controls .playbtn{width:clamp(62px,17vw,76px);height:clamp(62px,17vw,76px);min-width:clamp(62px,17vw,76px);font-size:27px;}
+#now .controls .mode-control{min-width:clamp(68px,19vw,82px);padding:8px 4px;}
+#now .mode-control .mode-icon{font-size:26px;}
+#now .mode-control small{font-size:10px;}
+#now .nowextras{flex:0 0 auto;margin:0;gap:10px;}
+#now .nowextras button{padding:11px 12px;font-size:clamp(11px,3.1vw,13px);}
+@media(max-height:760px){#pages{padding-bottom:calc(98px + env(safe-area-inset-bottom));}#now.nowpage{gap:7px;}#now .bigart{width:min(53vw,245px);}#now .nowmeta h1{font-size:clamp(20px,5.3vw,24px);margin:5px 0 7px;}#now .timeline{gap:6px;}#now .controls .playbtn{width:56px;height:56px;min-width:56px;}}

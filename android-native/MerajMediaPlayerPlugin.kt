@@ -137,7 +137,7 @@ class MerajMediaPlayerPlugin : Plugin() {
     @PluginMethod fun seekTo(call: PluginCall) = withController(call) { p ->
         val position = call.getLong("positionMs")
         if (position == null || position < 0) call.reject("positionMs must be non-negative.")
-        else { p.seekTo(position); call.resolve(JSObject().put("positionMs", position)) }
+        else { val duration = p.duration; val target = if (duration > 0L) position.coerceIn(0L, duration) else position; p.seekTo(target); call.resolve(JSObject().put("positionMs", target).put("accepted", true)) }
     }
 
     override fun handleOnDestroy() {

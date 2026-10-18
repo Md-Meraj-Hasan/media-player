@@ -11,7 +11,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import android.media.audiofx.Equalizer
-import androidx.media3.common.AudioListener
 
 /** Owns playback independently of the WebView and supplies Android media notification/controls. */
 class MerajPlaybackService : MediaSessionService() {
@@ -33,9 +32,24 @@ class MerajPlaybackService : MediaSessionService() {
             setHandleAudioBecomingNoisy(true)
         }
         player = exoPlayer
-        exoPlayer.addAudioListener(object : AudioListener {
-            override fun onAudioSessionIdChanged(audioSessionId: Int) {
-                MerajAudioEffects.attach(audioSessionId)
+        // Media3 exposes the active output session through ExoPlayer; attach the
+        // platform Equalizer when playback has initialized the audio output.
+        exoPlayer.addListener(object : Player.Listener {
+            private fun attachCurrentAudioSession() {
+                val sessionId = exoPlayer.audioSessionId
+                if (sessionId > 0) MerajAudioEffects.attach(sessionId)
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) attachCurrentAudioSession()
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) attachCurrentAudioSession()
+            }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                attachCurrentAudioSession()
             }
         })
         val builder = MediaSession.Builder(this, exoPlayer)

@@ -85,8 +85,51 @@ function openAudioPopover(id){const el=$(id),wasOpen=!el.hidden;closeAudioPopove
 function syncSpeedUI(){$('#speedLabel').textContent=playbackSpeed.toFixed(1)+'×';$('#speedOptions').innerHTML=speedSteps.map(v=>`<button class="${v===playbackSpeed?'selected':''}" data-speed="${v}">${v.toFixed(1)}×</button>`).join('');$('#speedOptions').querySelectorAll('[data-speed]').forEach(b=>b.onclick=()=>setPlaybackSpeed(+b.dataset.speed))}
 async function setPlaybackSpeed(v){playbackSpeed=Math.min(1.5,Math.max(0.5,+v||1));try{if(nativePlayback)await NativePlayer.setPlaybackSpeed({speed:playbackSpeed});else audio.playbackRate=playbackSpeed;syncSpeedUI();closeAudioPopovers();toast('Speed '+playbackSpeed.toFixed(1)+'×')}catch(e){console.error(e);toast('Speed change failed')}}
 $('#speedBtn').onclick=()=>openAudioPopover('#speedPopover');
-$('#equalizerBtn').onclick=async()=>{openAudioPopover('#equalizerPopover');if(nativePlayback&&Capacitor.isNativePlatform()){try{const r=await NativePlayer.getEqualizerPresets();if(r?.presets?.length){$('#equalizerPresets').innerHTML=r.presets.map(x=>`<button data-eq="${esc(x.key)}" class="${x.key===equalizerPreset?'selected':''}">${esc(x.name)}</button>`).join('');$('#equalizerPresets').querySelectorAll('[data-eq]').forEach(b=>b.onclick=()=>setEqualizerPreset(b.dataset.eq));$('#eqNote').textContent='Device-supported Android equalizer presets'}}catch(e){console.warn(e)}}};
-async function setEqualizerPreset(key){try{if(!nativePlayback){toast('Play a song in the Android app first.');return}await NativePlayer.setEqualizerPreset({preset:key});equalizerPreset=key;closeAudioPopovers();toast('Equalizer: '+key.replace(/-/g,' '))}catch(e){console.error(e);toast('Preset not supported on this device')}}
+const eqPresetNames={normal:'Normal',dance:'Dance',classic:'Classic',jazz:'Jazz',pop:'Pop',rock:'Rock',flat:'Flat','bass-boost':'Bass Boost'};
+let eqAvailablePresets=[];
+function renderEqualizerPresets(){
+  const list=eqAvailablePresets.length?eqAvailablePresets:Object.entries(eqPresetNames).map(([key,name])=>({key,name}));
+  $('#equalizerPresets').innerHTML=list.map(x=>`<button type="button" data-eq="${esc(x.key)}" class="${x.key===equalizerPreset?'selected':''}" aria-pressed="${x.key===equalizerPreset?'true':'false'}">${esc(x.name)}</button>`).join('');
+  $('#equalizerPresets').querySelectorAll('[data-eq]').forEach(b=>b.onclick=()=>setEqualizerPreset(b.dataset.eq));
+}
+$('#equalizerBtn').onclick=async()=>{
+  openAudioPopover('#equalizerPopover');
+  renderEqualizerPresets();
+  if(nativePlayback&&Capacitor.isNativePlatform()){
+    try{
+      const r=await NativePlayer.getEqualizerPresets();
+      if(r?.presets?.length){
+        eqAvailablePresets=r.presets;
+        // Map the saved selected preset to a device preset by normalized name.
+        if(!eqAvailablePresets.some(x=>x.key===equalizerPreset)) {
+          const match=eqAvailablePresets.find(x=>x.key===String(equalizerPreset).replace(/-/g,' ')) ||
+            eqAvailablePresets.find(x=>x.name.toLowerCase()===String(equalizerPreset).replace(/-/g,' '));
+          if(match) equalizerPreset=match.key;
+        }
+        renderEqualizerPresets();
+        $('#eqNote').textContent='Select a preset; the highlighted option is active.';
+      } else {
+        $('#eqNote').textContent='No Android equalizer presets were reported. Check the audio session.';
+      }
+    }catch(e){console.error('Equalizer preset list failed',e);$('#eqNote').textContent='Could not load equalizer presets. Check Android audio session.';}
+  } else {
+    $('#eqNote').textContent='Play a song from the Android app to apply an equalizer preset.';
+  }
+};
+async function setEqualizerPreset(key){
+  if(!nativePlayback||!Capacitor.isNativePlatform()){toast('Play a song in the Android app first.');return;}
+  try{
+    const result=await NativePlayer.setEqualizerPreset({preset:key});
+    equalizerPreset=result?.preset||key;
+    renderEqualizerPresets();
+    $('#eqNote').textContent='Active preset: '+(eqPresetNames[equalizerPreset]||eqAvailablePresets.find(x=>x.key===equalizerPreset)?.name||equalizerPreset);
+    toast('Equalizer applied: '+(eqPresetNames[equalizerPreset]||equalizerPreset.replace(/-/g,' ')));
+  }catch(e){
+    console.error('Equalizer apply failed',e);
+    $('#eqNote').textContent='Could not apply this preset: '+(e?.message||'Android equalizer unavailable');
+    toast('Equalizer could not be applied. Check Android audio session.');
+  }
+}
 $$('[data-close-audio]').forEach(b=>b.onclick=closeAudioPopovers);document.addEventListener('click',e=>{if(!e.target.closest('.audio-popover')&&!e.target.closest('.audio-tool'))closeAudioPopovers()});syncSpeedUI();
 $('#likeNow').onclick=()=>{if(current<0)return;favs.has(current)?favs.delete(current):favs.add(current);renderAll();syncNow()};function renderFavorites(){fillList('#favoriteList',[...favs].filter(i=>tracks[i]))}function renderFolders(){let map={};tracks.forEach((t,i)=>{let f=t.path.includes('/')?t.path.split('/').slice(0,-1).join('/'):'Root / Selected files';(map[f]??=[]).push(i)});$('#folderList').innerHTML=Object.keys(map).length?Object.entries(map).map(([f,ids])=>`<div class="song"><div class="art">▣</div><button class="songinfo" data-folder="${esc(f)}"><b>${esc(f)}</b><small>${ids.length} audio file(s)</small></button></div><div class="nested" id="folder-${Object.keys(map).indexOf(f)}"></div>`).join(''):'<p class="muted">No folders loaded. Select a music folder using ↻.</p>';$$('[data-folder]').forEach((b,i)=>b.onclick=()=>{let ids=map[b.dataset.folder];$('#folder-'+i).innerHTML=ids.map(j=>songRow(tracks[j],j)).join('');bindRows()})}function renderAlbums(){let map={};tracks.forEach((t,i)=>(map[t.album]??=[]).push(i));$('#albumList').innerHTML=Object.keys(map).length?Object.entries(map).map(([name,ids],i)=>`<button class="album" data-album="${esc(name)}"><div class="albumart">♫</div><b>${esc(name)}</b><small>${ids.length} songs</small></button>`).join(''):'<p class="muted">Album details will appear when available in local music metadata.</p>';$$('[data-album]').forEach(b=>b.onclick=()=>{page('songs');fillList('#allSongs',map[b.dataset.album]);bindRows()})}function renderArtists(){let map={};tracks.forEach((t,i)=>(map[t.artist]??=[]).push(i));$('#artistList').innerHTML=Object.keys(map).length?Object.entries(map).map(([name,ids])=>`<div class="song"><div class="art">♙</div><button class="songinfo" data-artist="${esc(name)}"><b>${esc(name)}</b><small>${ids.length} songs</small></button></div>`).join(''):'<p class="muted">Artist names will appear when available in local music metadata.</p>';$$('[data-artist]').forEach(b=>b.onclick=()=>{page('songs');fillList('#allSongs',map[b.dataset.artist]);bindRows()})}function doSearch(q){let ids=tracks.map((t,i)=>({t,i})).filter(x=>(x.t.name+' '+x.t.artist+' '+x.t.path).toLowerCase().includes(q.toLowerCase())).map(x=>x.i);fillList('#searchResults',ids);bindRows()}$('#searchInput').oninput=e=>doSearch(e.target.value);$('#searchHome').oninput=e=>{page('search');$('#searchInput').value=e.target.value;doSearch(e.target.value)};
 function syncTimeline(){const pos=nativePlayback?nativePosition:audio.currentTime;const dur=nativePlayback?nativeDuration:audio.duration;if(dur>0){if(!seekDragging)$('#seek').value=Math.min(1000,Math.max(0,pos/dur*1000));$('#elapsed').textContent=fmt(pos);$('#duration').textContent=fmt(dur)}}

@@ -10,6 +10,8 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import android.media.audiofx.Equalizer
+import androidx.media3.common.AudioListener
 
 /** Owns playback independently of the WebView and supplies Android media notification/controls. */
 class MerajPlaybackService : MediaSessionService() {
@@ -31,6 +33,11 @@ class MerajPlaybackService : MediaSessionService() {
             setHandleAudioBecomingNoisy(true)
         }
         player = exoPlayer
+        exoPlayer.addAudioListener(object : AudioListener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                MerajAudioEffects.attach(audioSessionId)
+            }
+        })
         val builder = MediaSession.Builder(this, exoPlayer)
         if (sessionActivity != null) builder.setSessionActivity(sessionActivity)
         mediaSession = builder.build()
@@ -44,9 +51,64 @@ class MerajPlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        MerajAudioEffects.release()
         mediaSession?.run { player.release(); release() }
         mediaSession = null
         player = null
         super.onDestroy()
+    }
+}
+
+
+/** Audio effects are attached to the actual ExoPlayer audio session, not the WebView or controller. */
+internal object MerajAudioEffects {
+    @Volatile private var sessionId: Int = 0
+    @Volatile private var effect: Equalizer? = null
+
+    @Synchronized fun attach(id: Int) {
+        try {
+            effect?.release()
+            effect = null
+            sessionId = id
+            if (id > 0) effect = Equalizer(0, id).apply { enabled = true }
+        } catch (e: Exception) {
+            android.util.Log.e("MerajMediaPlayer", "Could not attach Equalizer to session $id", e)
+        }
+    }
+
+    @Synchronized fun presets(): List<Pair<String, String>> {
+        val eq = effect ?: return emptyList()
+        return try {
+            (0 until eq.numberOfPresets).map { i ->
+                val name = eq.getPresetName(i.toShort()).toString()
+                val key = name.lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+                key to name
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MerajMediaPlayer", "Could not read Equalizer presets", e)
+            emptyList()
+        }
+    }
+
+    @Synchronized fun apply(key: String): Boolean {
+        val eq = effect ?: return false
+        return try {
+            val idx = (0 until eq.numberOfPresets).firstOrNull { i ->
+                eq.getPresetName(i.toShort()).toString().lowercase()
+                    .replace(Regex("[^a-z0-9]+"), "-").trim('-') == key
+            } ?: return false
+            eq.usePreset(idx.toShort())
+            eq.enabled = true
+            true
+        } catch (e: Exception) {
+            android.util.Log.e("MerajMediaPlayer", "Could not apply Equalizer preset $key", e)
+            false
+        }
+    }
+
+    @Synchronized fun release() {
+        try { effect?.release() } catch (_: Exception) {}
+        effect = null
+        sessionId = 0
     }
 }

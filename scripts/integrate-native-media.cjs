@@ -1,23 +1,52 @@
+
 const fs = require('fs');
 const path = require('path');
 
 const root = process.cwd();
-const androidRoot = path.join(root, 'android');
-const appRoot = path.join(androidRoot, 'app');
-const javaRoot = path.join(appRoot, 'src', 'main', 'java');
-const manifest = path.join(appRoot, 'src', 'main', 'AndroidManifest.xml');
-const nativeRoot = path.join(root, 'android-native');
+const assetsDir = path.join(root, 'android', 'app', 'src', 'main', 'assets');
 
-function walk(dir, predicate, out = []) {
-  if (!fs.existsSync(dir)) return out;
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) walk(full, predicate, out);
-    else if (predicate(full, entry.name)) out.push(full);
-  }
-  return out;
+if (!fs.existsSync(assetsDir)) {
+  fs.mkdirSync(assetsDir, { recursive: true });
 }
 
+// 1. Root directory ki video-player.html ko Android assets mein copy karein
+const srcHtml = path.join(root, 'video-player.html');
+const destHtml = path.join(assetsDir, 'video-player.html');
+
+if (fs.existsSync(srcHtml)) {
+  fs.copyFileSync(srcHtml, destHtml);
+  console.log('[integrate-media] video-player.html copied to Android assets successfully.');
+} else {
+  console.error('[integrate-media] Error: video-player.html not found in root directory!');
+  process.exit(1);
+}
+
+// 2. video-src/ folder ko Android assets mein recursive tareeqe se copy karein
+const srcVideoSrc = path.join(root, 'video-src');
+const destVideoSrc = path.join(assetsDir, 'video-src');
+
+function copyRecursive(src, dest) {
+  if (!fs.existsSync(src)) return;
+  const stats = fs.statSync(src);
+  if (stats.isDirectory()) {
+    if (!fs.existsSync(dest)) {
+      fs.mkdirSync(dest, { recursive: true });
+    }
+    for (const childItemName of fs.readdirSync(src)) {
+      copyRecursive(path.join(src, childItemName), path.join(dest, childItemName));
+    }
+  } else {
+    fs.copyFileSync(src, dest);
+  }
+}
+
+if (fs.existsSync(srcVideoSrc)) {
+  copyRecursive(srcVideoSrc, destVideoSrc);
+  console.log('[integrate-media] video-src/ folder copied to Android assets successfully.');
+} else {
+  console.error('[integrate-media] Warning: video-src/ folder not found in root directory.');
+                }
+              
 if (!fs.existsSync(androidRoot)) throw new Error('Android project not found. Run npx cap add android first.');
 if (!fs.existsSync(manifest)) throw new Error(`AndroidManifest.xml not found at ${manifest}`);
 

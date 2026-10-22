@@ -312,9 +312,11 @@ class NativeVideoPlayerActivity : Activity() {
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     @Suppress("DEPRECATION")
-    override fun onBackPressed() {
-        finish()
+        override fun onBackPressed() {
+        webView.evaluateJavascript("window.postMessage('meraj-video-parent-hide')", null)
+        super.onBackPressed()
     }
+
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)

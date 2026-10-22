@@ -23,7 +23,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'
+          node-version: '20'   # <-- Node version 18 se 20 kar diya gaya hai
 
       - name: Install Dependencies and Build Web Assets
         run: |

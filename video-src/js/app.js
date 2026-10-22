@@ -23,8 +23,6 @@
       if (message.ok) pending.resolve(message.result); else pending.reject(new Error(message.error || 'Native operation failed'));
     } else if (message.type === 'meraj-video-native-back') {
       window.handleMerajAndroidBack?.();
-    } else if (message.type === 'meraj-video-parent-hide') {
-      try { video.pause(); audio.pause(); } catch (_) {}
       // Leaving the Video page must restore portrait at the native Android level;
       // the Web Screen Orientation API alone does not reliably reset Capacitor WebView.
       try { await callParentNative('orientationLock', { orientation: 'portrait' }); } catch (_) {}

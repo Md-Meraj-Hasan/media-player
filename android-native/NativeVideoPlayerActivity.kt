@@ -14,6 +14,7 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.WindowManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.widget.FrameLayout
 import android.widget.Toast
@@ -27,7 +28,7 @@ import androidx.media3.ui.PlayerView
 import com.google.common.util.concurrent.ListenableFuture
 import java.util.Locale
 
-/** Custom Web GUI Video Player with Native Volume/Brightness Gestures */
+/** Custom Web GUI Video Player with Native Volume/Brightness Gestures & JS Bridge */
 class NativeVideoPlayerActivity : Activity() {
     private lateinit var root: FrameLayout
     private lateinit var playerView: PlayerView
@@ -78,20 +79,21 @@ class NativeVideoPlayerActivity : Activity() {
 
         // 1. Setup ExoPlayer View with native controls DISABLED
         playerView = PlayerView(this).apply {
-            useController = false // Disable Native ExoPlayer UI Controls[cite: 1]
+            useController = false
             resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
             setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
             setKeepContentOnPlayerReset(true)
         }
         root.addView(playerView, FrameLayout.LayoutParams(-1, -1))
 
-        // 2. Setup WebView for HTML/CSS Custom GUI Controls
+        // 2. Setup WebView for HTML/CSS Custom GUI Controls with JS Bridge
         webView = WebView(this).apply {
             setBackgroundColor(Color.TRANSPARENT)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.allowFileAccess = true
-            loadUrl("file:///android_asset/video-player.html") // Load HTML GUI
+            addJavascriptInterface(WebAppInterface(), "AndroidBridge")
+            loadUrl("file:///android_asset/video-player.html")
         }
         root.addView(webView, FrameLayout.LayoutParams(-1, -1))
 
@@ -185,6 +187,34 @@ class NativeVideoPlayerActivity : Activity() {
         videoTitle = intent.getStringExtra(EXTRA_TITLE) ?: videoUri?.lastPathSegment ?: "Video"
 
         setupMediaController()
+    }
+
+    // JavaScript Bridge to let HTML/CSS controls command the ExoPlayer
+    inner class WebAppInterface {
+        @JavascriptInterface
+        fun play() {
+            handler.post { controller?.play() }
+        }
+
+        @JavascriptInterface
+        fun pause() {
+            handler.post { controller?.pause() }
+        }
+
+        @JavascriptInterface
+        fun seekTo(positionMs: Long) {
+            handler.post { controller?.seekTo(positionMs) }
+        }
+
+        @JavascriptInterface
+        fun next() {
+            handler.post { controller?.let { if (it.hasNextMediaItem()) it.seekToNextMediaItem() } }
+        }
+
+        @JavascriptInterface
+        fun previous() {
+            handler.post { controller?.let { if (it.hasPreviousMediaItem()) it.seekToPreviousMediaItem() } }
+        }
     }
 
     private fun setupMediaController() {
@@ -286,7 +316,7 @@ class NativeVideoPlayerActivity : Activity() {
         finish()
     }
 
-    override fun onDestroy() {
+    override onDestroy() {
         handler.removeCallbacksAndMessages(null)
         playerView.player = null
         val c = controller

@@ -316,7 +316,7 @@ class NativeVideoPlayerActivity : Activity() {
         finish()
     }
 
-    override onDestroy() {
+    override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
         playerView.player = null
         val c = controller

@@ -135,23 +135,94 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline
 }
 
 
-/* MP3 Tools page */
-.mp3tools-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0 28px}
-.mp3tool-card{min-height:128px;text-align:left;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:7px;padding:15px;border:1px solid var(--border,#302b45);border-radius:18px;background:linear-gradient(145deg,var(--card,#201d31),#171625);color:var(--text,#f5f2ff);box-shadow:0 7px 18px #0002}
-.mp3tool-card:active{transform:scale(.985)}
-.tool-icon{width:42px;height:42px;display:grid;place-items:center;border-radius:13px;background:color-mix(in srgb,var(--accent,#bb79ff) 18%,transparent);color:var(--accent,#c98cff);font-size:23px;font-weight:800}
-.mp3tool-card b{font-size:14px}.mp3tool-card small{font-size:11px;color:var(--muted,#aaa4bc);line-height:1.35}
-.tool-modal{position:fixed;inset:0;z-index:50;background:#07060dd9;display:flex;align-items:flex-end;justify-content:center;padding:10px;backdrop-filter:blur(8px)}
-.tool-modal[hidden]{display:none}
-.tool-panel{width:min(540px,100%);max-height:88dvh;overflow:auto;border:1px solid #453a5d;border-radius:24px 24px 18px 18px;background:var(--panel,#1a1828);padding:18px;color:var(--text,#f7f3ff);box-shadow:0 20px 70px #0008}
-.tool-panel h2{font-size:21px;margin:3px 0 0}.tool-eyebrow{font-size:10px;letter-spacing:1.5px;color:var(--muted,#aaa4bc)}
-.tool-file-label{display:flex;align-items:center;gap:12px;margin:16px 0;padding:14px;border:1px dashed #6a557e;border-radius:15px;background:#272238;cursor:pointer}
-.tool-file-label>span:first-child{font-size:26px;color:var(--accent,#c98cff)}.tool-file-label b,.tool-file-label small{display:block}.tool-file-label small{font-size:11px;color:#b6aec9;margin-top:4px;overflow-wrap:anywhere}
-.tool-options{display:grid;gap:12px;margin:12px 0}
-.tool-field,.tool-field-row label{display:grid;gap:6px;font-size:12px;color:var(--muted,#aaa4bc)}
-.tool-field-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.tool-options input,.tool-options select{width:100%;min-width:0;padding:11px;border:1px solid #423852;border-radius:11px;background:#12111c;color:#f8f4ff;font-size:14px}
-.tool-hint{font-size:11px;line-height:1.5;color:var(--muted,#aaa4bc);margin:0}
-.tool-status{min-height:24px;font-size:12px;line-height:1.45;color:#d7baff;margin:10px 0;overflow-wrap:anywhere}
-.tool-run-btn{width:100%;padding:14px;border-radius:14px;background:var(--accent,#8b5cf6);color:white;font-weight:800}.tool-run-btn:disabled{opacity:.55}
-@media(max-height:700px){.mp3tool-card{min-height:112px;padding:12px}.tool-panel{max-height:92dvh}}
+/* Embedded video player uses exactly the same available content area as the audio player.
+   #pages already reserves space for the fixed bottom navigation, so the iframe must not
+   use viewport-based heights or large min-heights that create a gap above the nav. */
+.video-embed-page {
+  padding: 0 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  flex: 1 1 0 !important;
+  overflow: hidden !important;
+}
+.video-player-embed {
+  display: block;
+  width: 100%;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  flex: 1 1 auto;
+  border: 1px solid rgba(148,163,184,.15);
+  border-radius: 16px;
+  background: #09090f;
+  overflow: hidden;
+}
+@media (max-width:600px) {
+  .video-player-embed { height:100% !important; min-height:0 !important; border-radius:12px; }
+}
+
+/* Pure video mode: hide the audio shell chrome while the dedicated video UI is active. */
+body.video-mode .top,
+body.video-mode > .app > .top,
+body.video-mode .bottom,
+body.video-mode .mini { display: none !important; }
+body.video-mode .app { max-width: none; min-height: 100dvh; padding: 0; border: 0; border-radius: 0; overflow: visible; }
+body.video-mode main { padding: 0; min-height: 100dvh; }
+body.video-mode #videoPlayer { padding: 0 !important; margin: 0; min-height: 0; }
+body.video-mode #videoPlayer .pagetitle { display: none !important; }
+body.video-mode .video-player-embed { width: 100%; height: 100dvh; min-height: 100dvh; border: 0; border-radius: 0; display: block; }
+
+/* Share action: matching Meraj Media purple/blue glass controls */
+.sharebtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-width:42px;height:42px;padding:5px 7px;border-radius:13px;border:1px solid var(--accent-border);background:linear-gradient(135deg,var(--accent-soft),#3478ff16);color:var(--accent2);}
+.sharebtn svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sharebtn small{font-size:9px;line-height:1.2;font-weight:700}
+.sharebtn:active{transform:scale(.96);filter:brightness(1.15)}
+@media(max-width:380px){.topactions{gap:5px}.sharebtn{min-width:36px;padding-inline:4px}.scanbtn{padding-inline:8px}}
+
+/* FINAL VIDEO PAGE SIZE FIX: let the active page and iframe share the available
+   content height; avoid percentage heights without a definite parent height. */
+#pages { min-height: 0; }
+#videoPlayer.page.active,
+.video-embed-page.page.active {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+#videoPlayer .video-player-embed,
+.video-embed-page .video-player-embed {
+  display: block !important;
+  flex: 1 1 0 !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  align-self: stretch !important;
+  box-sizing: border-box !important;
+}
+body.video-mode #videoPlayer.page.active .video-player-embed {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+}
+
+
+/* Final viewport correction: the video library must occupy the whole WebView area. */
+html, body { min-height:100%; }
+body.video-mode, body.video-mode .app { width:100% !important; height:100dvh !important; min-height:100dvh !important; max-height:100dvh !important; overflow:hidden !important; }
+body.video-mode main { width:100% !important; height:auto !important; min-height:0 !important; max-height:none !important; flex:1 1 0 !important; padding:0 !important; margin:0 !important; overflow:hidden !important; display:flex !important; flex-direction:column !important; }
+body.video-mode #pages { width:100% !important; height:100% !important; min-height:0 !important; max-height:none !important; flex:1 1 0 !important; padding:0 !important; margin:0 !important; overflow:hidden !important; display:flex !important; flex-direction:column !important; }
+body.video-mode #videoPlayer.page.active { width:100% !important; height:100% !important; min-height:0 !important; max-height:none !important; flex:1 1 0 !important; padding:0 !important; margin:0 !important; border:0 !important; border-radius:0 !important; overflow:hidden !important; display:flex !important; flex-direction:column !important; }
+body.video-mode #videoPlayer .video-embed-page { width:100% !important; height:100% !important; min-height:0 !important; max-height:none !important; flex:1 1 0 !important; padding:0 !important; margin:0 !important; overflow:hidden !important; display:flex !important; flex-direction:column !important; }
+body.video-mode #videoPlayer .video-player-embed { width:100% !important; height:100% !important; min-height:0 !important; max-height:none !important; flex:1 1 0 !important; padding:0 !important; margin:0 !important; border:0 !important; border-radius:0 !important; overflow:hidden !important; display:block !important; }
+body.video-mode #videoPlayer.page.active { display:flex !important; flex-direction:column !important; }
+
+/* v2 verified layout correction: preserve the shell's flex sizing and keep iframe inside the available content area. */
+body.video-mode .app { display:flex !important; flex-direction:column !important; height:100dvh !important; min-height:0 !important; max-height:100dvh !important; overflow:hidden !important; }
+body.video-mode main { min-height:0 !important; }
+body.video-mode #pages { min-height:0 !important; }

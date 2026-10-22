@@ -1,12 +1,74 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];const audio=$('#audio');const NativePlayer=registerPlugin('MerajMediaPlayer');NativePlayer.addListener('trackChanged',ev=>{const idx=tracks.findIndex(t=>String(t.id||t.uri)===String(ev.mediaId));if(idx>=0){current=idx;nativePlayback=true;nativeEndedHandled=false;nativeIsPlaying=true;syncNow();}});let tracks=[],current=-1,favs=new Set(),shuffleMode=0,repeatMode=0,folderMode=false,nativeMode=false,nativePlayback=false,nativeIsPlaying=false,nativePosition=0,nativeDuration=0,nativeEndedHandled=false,historyPages=['home'],playbackSpeed=1,equalizerPreset='normal';const colors=['','c2','c3','c4'];
+import { App } from '@capacitor/app';
+import { ScreenOrientation } from '@capacitor/screen-orientation';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+
+// Share the currently selected audio file via Android's native share sheet.
+async function shareMerajMedia() {
+  const t = current >= 0 ? tracks[current] : null;
+  if (!t) { toast('Select an audio track first, then tap Share.'); return; }
+  try {
+    if (t.native && t.uri) {
+      await VideoScannerBridge.shareMedia({ uri: t.uri, name: t.name || 'audio', mimeType: t.mimeType || 'audio/*' });
+      return;
+    }
+    if (t.file && navigator.share && navigator.canShare?.({ files: [t.file] })) {
+      await navigator.share({ files: [t.file], title: t.file.name });
+      return;
+    }
+    toast('To share device music, use the Android app after scanning your library.');
+  } catch (error) {
+    if (error?.name !== 'AbortError') { console.error('Audio share failed', error); toast('Could not share this audio file.'); }
+  }
+}
+const shareAppButton = document.getElementById('shareApp');
+if (shareAppButton) { shareAppButton.setAttribute('aria-label','Share selected audio'); shareAppButton.setAttribute('title','Share selected audio'); shareAppButton.addEventListener('click', shareMerajMedia); }
+// Video iframe bridge: keep the video UI/CSS isolated while routing native calls through the parent Capacitor bridge.
+const videoFrameBridge = document.getElementById('videoPlayerFrame');
+const VideoPermissionBridge = registerPlugin('MediaPermission');
+const VideoScannerBridge = registerPlugin('MediaLibraryScanner');
+window.addEventListener('message', async (event) => {
+  if (!videoFrameBridge || event.source !== videoFrameBridge.contentWindow) return;
+  const message = event.data;
+  if (message?.type === 'meraj-video-switch-audio') { page('home'); return; }
+  if (!message || message.bridge !== 'meraj-video-native' || !message.requestId) return;
+  const reply = { bridge: 'meraj-video-native-result', requestId: message.requestId };
+  try {
+    switch (message.action) {
+      case 'permission': reply.result = await VideoPermissionBridge.requestIfNeeded(); break;
+      case 'scan': reply.result = await VideoScannerBridge.scan({ type: message.payload?.type || 'video' }); break;
+      case 'launchVideo': reply.result = await VideoScannerBridge.launchVideo(message.payload || {}); break;
+      case 'preparePlayback': reply.result = await VideoScannerBridge.preparePlayback(message.payload || {}); break;
+      case 'getThumbnail': reply.result = await VideoScannerBridge.getThumbnail(message.payload || {}); break;
+      case 'shareMedia': reply.result = await VideoScannerBridge.shareMedia(message.payload || {}); break;
+      case 'orientationLock': await ScreenOrientation.lock({ orientation: message.payload?.orientation || 'landscape' }); reply.result = { locked: true }; break;
+      case 'orientationUnlock': await ScreenOrientation.unlock(); reply.result = { locked: false }; break;
+      case 'exitApp': await App.exitApp(); reply.result = { exited: true }; break;
+      default: throw new Error('Unsupported video native action: ' + message.action);
+    }
+    reply.ok = true;
+  } catch (error) {
+    reply.ok = false;
+    reply.error = String(error?.message || error || 'Native operation failed');
+  }
+  event.source.postMessage(reply, '*');
+});
+try {
+  App.addListener('backButton', () => {
+    if (videoFrameBridge && document.getElementById('videoPlayer')?.classList.contains('active')) {
+      videoFrameBridge.contentWindow?.postMessage({ type: 'meraj-video-native-back' }, '*');
+    } else {
+      goBack();
+    }
+  }).catch(() => {});
+} catch (_) {}
+const audio=$('#audio');const NativePlayer=registerPlugin('MerajMediaPlayer');NativePlayer.addListener('trackChanged',ev=>{const idx=tracks.findIndex(t=>String(t.id||t.uri)===String(ev.mediaId));if(idx>=0){current=idx;nativePlayback=true;nativeEndedHandled=false;nativeIsPlaying=true;syncNow();}});let tracks=[],current=-1,favs=new Set(),shuffleMode=0,repeatMode=0,folderMode=false,nativeMode=false,nativePlayback=false,nativeIsPlaying=false,nativePosition=0,nativeDuration=0,nativeEndedHandled=false,historyPages=['home'],playbackSpeed=1,equalizerPreset='normal';const colors=['','c2','c3','c4'];
 // Premium color themes: saved locally on this device.
 const themeNames=['default','green','red'];
 function applyTheme(theme,save=true){if(!themeNames.includes(theme))theme='default';document.documentElement.dataset.theme=theme;$$('.theme-option').forEach(b=>b.classList.toggle('selected',b.dataset.theme===theme));const meta=document.querySelector('meta[name="theme-color"]');if(meta)meta.content=theme==='green'?'#071b17':theme==='red'?'#200d13':'#10101c';if(save){try{localStorage.setItem('merajMusicTheme',theme)}catch(e){}}}
 const themeToggle=$('#themeToggle'),themePopover=$('#themePopover');
 if(themeToggle&&themePopover){themeToggle.addEventListener('click',e=>{e.stopPropagation();themePopover.hidden=!themePopover.hidden});themePopover.addEventListener('click',e=>{const b=e.target.closest('[data-theme]');if(!b)return;applyTheme(b.dataset.theme);themePopover.hidden=true;toast(b.dataset.theme==='default'?'Default theme applied.':b.dataset.theme==='green'?'Green theme applied.':'Red theme applied.')});document.addEventListener('click',e=>{if(!themePopover.contains(e.target)&&e.target!==themeToggle)themePopover.hidden=true});let saved='default';try{saved=localStorage.getItem('merajMusicTheme')||'default'}catch(e){}applyTheme(saved,false)}
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function toast(t){let x=$('#toast');x.textContent=t;x.classList.add('show');setTimeout(()=>x.classList.remove('show'),2600)}function fmt(n){if(!Number.isFinite(n))return '0:00';return Math.floor(n/60)+':'+String(Math.floor(n%60)).padStart(2,'0')}function page(id){if(!window.__pageBack) {if(historyPages[historyPages.length-1]!==id) historyPages.push(id)} window.__pageBack=false; $$('.page').forEach(p=>p.classList.toggle('active',p.id===id));$$('.nav').forEach(b=>b.classList.toggle('active',b.dataset.page===id));const mini=$('#mini');if(mini)mini.classList.toggle('hidden',id==='now'||current<0);if(id==='now')syncNow();if(id==='folders')renderFolders();if(id==='favorites')renderFavorites();if(id==='albums')renderAlbums();if(id==='artists')renderArtists();window.scrollTo(0,0)}$$('[data-page]').forEach(b=>b.addEventListener('click',()=>page(b.dataset.page))); $$('.back').forEach(b=>b.addEventListener('click',()=>goBack())); function goBack(){if(historyPages.length>1)historyPages.pop();const target=historyPages[historyPages.length-1]||'home';window.__pageBack=true;page(target)} window.addEventListener('keydown',e=>{if((e.key==='Escape'||e.key==='Backspace')&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){e.preventDefault();goBack()}});function addFiles(files){let added=0;for(const f of files){if(!f.type.startsWith('audio/')&&!/\.(mp3|m4a|aac|wav|ogg|flac|opus)$/i.test(f.name))continue;let path=f.webkitRelativePath||f.name;if(tracks.some(t=>t.name===f.name&&t.size===f.size&&t.path===path))continue;tracks.push({name:f.name.replace(/\.[^.]+$/,''),artist:'Local audio',album:'Unknown album',path,size:f.size,url:URL.createObjectURL(f),file:f,native:false});added++}renderAll();toast(added?`Added ${added} local audio file(s).`:'No new audio files found.');}$('#scan').onclick=()=>{if('showDirectoryPicker'in window){$('#folderPicker').click()}else $('#folderPicker').click()};$('#folderPicker').addEventListener('change',e=>addFiles(e.target.files));$('#filePicker').addEventListener('change',e=>addFiles(e.target.files));function songRow(t,i){const active=i===current;return `<div class="song ${active?'is-playing':''}" data-song-row="${i}"><div class="art ${colors[i%4]} ${active?'playing-art':''}">${active&&!isPaused()?'♫':'♫'}</div><button class="songinfo" data-play="${i}"><b>${esc(t.name)}${active?' <span class=\"playing-badge\">'+(isPaused()?'PAUSED':'PLAYING')+'</span>':''}</b><small>${active?(isPaused()?'Ⅱ Paused · ':'♫ Now playing · '):''}${esc(t.path.includes('/')?t.path.split('/').slice(0,-1).join(' / '):'Local audio')} · ${esc(t.artist)}</small></button><button class="more" data-fav="${i}" title="Favorite">${favs.has(i)?'♥':'♡'}</button></div>`}function fillList(id,arr){$(id).innerHTML=arr.length?arr.map(i=>songRow(tracks[i],i)).join(''):'<p class="muted">No music loaded yet. In browser preview, use the ↻ button to select a music folder. Android app will scan local music after permission is granted.</p>'}function renderAll(){let all=tracks.map((_,i)=>i);fillList('#recent',all.slice(-5).reverse());fillList('#allSongs',all);fillList('#libraryRecent',all.slice(-6).reverse());$('#songCount').textContent=tracks.length+' tracks';$('#countBadge').textContent=tracks.length+' songs';$('#favCount').textContent=favs.size+' saved';renderFavorites();bindRows()}function bindRows(){$$('[data-play]').forEach(b=>b.onclick=()=>playTrack(+b.dataset.play));$$('[data-fav]').forEach(b=>b.onclick=()=>{let i=+b.dataset.fav;favs.has(i)?favs.delete(i):favs.add(i);renderAll()})}async function playTrack(i){if(i<0||i>=tracks.length)return;current=i;const t=tracks[i];if(Capacitor.isNativePlatform()&&t.native&&t.uri){nativePlayback=true;nativeIsPlaying=false;nativePosition=0;nativeDuration=Number(t.duration||0)/1000;audio.pause();try{await NativePlayer.setQueue({items:tracks.filter(x=>x.native&&x.uri).map(x=>({id:String(x.id||x.uri),uri:x.uri,title:x.name,artist:x.artist})),startIndex:tracks.filter(x=>x.native&&x.uri).findIndex(x=>String(x.id||x.uri)===String(t.id||t.uri))});await NativePlayer.playAt({index:tracks.filter(x=>x.native&&x.uri).findIndex(x=>String(x.id||x.uri)===String(t.id||t.uri))});nativeIsPlaying=true;$('#mini').classList.remove('hidden');syncNow();page('now');await NativePlayer.setRepeatOne({enabled:repeatMode===2});await pollNativeState()}catch(e){nativeIsPlaying=false;syncNow();toast('Could not play this audio file on this device.');console.error(e)}return;}nativePlayback=false;audio.src=t.uri||t.url;audio.playbackRate=playbackSpeed;audio.play().then(()=>{$('#mini').classList.remove('hidden');syncNow();page('now')}).catch(()=>{syncNow();page('now');toast('Tap Play to start this local track.')});$('#mini').classList.remove('hidden');syncNow()}function isPaused(){return nativePlayback?!nativeIsPlaying:audio.paused}function syncNow(){if(current<0)return;let t=tracks[current];$('#nowTitle').textContent=t.name;$('#nowArtist').textContent=t.path.includes('/')?t.path.split('/').slice(0,-1).join(' / '):'Local audio';$('#miniTitle').textContent=t.name;$('#miniArtist').textContent='Local audio';$('#play').textContent=isPaused()?'▶':'Ⅱ';$('#miniPlay').textContent=isPaused()?'▶':'Ⅱ';$('#likeNow').innerHTML=(favs.has(current)?'♥ Remove from favorites':'♡ Add to favorites');$('#bigart').textContent='♫';updatePlayingRows()}function updatePlayingRows(){ $$('[data-song-row]').forEach(row=>{const i=Number(row.dataset.songRow),active=i===current;row.classList.toggle('is-playing',active);const info=row.querySelector('.songinfo');if(!info)return;const title=info.querySelector('b'),sub=info.querySelector('small');if(!title||!sub)return;title.innerHTML=esc(tracks[i]?.name||'')+(active?' <span class="playing-badge">'+(isPaused()?'PAUSED':'PLAYING')+'</span>':'');const t=tracks[i];sub.textContent=(active?(isPaused()?'Ⅱ Paused · ':'♫ Now playing · '):'')+(t?.path?.includes('/')?t.path.split('/').slice(0,-1).join(' / '):'Local audio')+' · '+(t?.artist||'Local audio')})}$('#play').onclick=async()=>{if(current<0){if(tracks.length)playTrack(0);else toast('No songs loaded.');return}if(nativePlayback){try{if(nativeIsPlaying)await NativePlayer.pause();else await NativePlayer.resume();await pollNativeState()}catch(e){toast('Playback control failed.')}return;}audio.paused?audio.play():audio.pause();syncNow()};$('#miniPlay').onclick=()=>$('#play').click();function trackFolder(t){const p=String(t?.path||t?.relativePath||'');return p.includes('/')?p.split('/').slice(0,-1).join('/'):'Root / Selected files'}function shufflePool(){if(shuffleMode===1&&current>=0){const folder=trackFolder(tracks[current]);const ids=tracks.map((t,i)=>({t,i})).filter(x=>trackFolder(x.t)===folder).map(x=>x.i);return ids.length?ids:tracks.map((_,i)=>i)}return tracks.map((_,i)=>i)}function step(d){if(!tracks.length)return;let n;if(shuffleMode){const pool=shufflePool();const choices=pool.filter(i=>i!==current);n=choices.length?choices[Math.floor(Math.random()*choices.length)]:current}else n=(Math.max(0,current)+d+tracks.length)%tracks.length;playTrack(n)}$('#next').onclick=()=>step(1);$('#prev').onclick=()=>{if(nativePlayback){if(nativePosition>3000){NativePlayer.seekTo({positionMs:0});nativePosition=0;syncTimeline()}else step(-1)}else if(audio.currentTime>3)audio.currentTime=0;else step(-1)};$('#miniNext').onclick=()=>step(1);audio.addEventListener('play',syncNow);audio.addEventListener('pause',syncNow);audio.addEventListener('ended',()=>{if(repeatMode===2){audio.currentTime=0;audio.play()}else if(repeatMode===1)step(1)});audio.addEventListener('timeupdate',()=>{if(audio.duration){if(!seekDragging)$('#seek').value=audio.currentTime/audio.duration*1000;$('#elapsed').textContent=fmt(audio.currentTime);$('#duration').textContent=fmt(audio.duration)}});
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}function toast(t){let x=$('#toast');x.textContent=t;x.classList.add('show');setTimeout(()=>x.classList.remove('show'),2600)}function fmt(n){if(!Number.isFinite(n))return '0:00';return Math.floor(n/60)+':'+String(Math.floor(n%60)).padStart(2,'0')}function page(id){const oldPage=$$('.page.active')[0]?.id;if(oldPage==='videoPlayer'&&id!=='videoPlayer')videoFrameBridge?.contentWindow?.postMessage({type:'meraj-video-parent-hide'},'*');if(!window.__pageBack) {if(historyPages[historyPages.length-1]!==id) historyPages.push(id)} window.__pageBack=false; $$('.page').forEach(p=>p.classList.toggle('active',p.id===id));document.body.classList.toggle('video-mode',id==='videoPlayer');$$('.nav').forEach(b=>b.classList.toggle('active',b.dataset.page===id));const mini=$('#mini');if(mini)mini.classList.toggle('hidden',id==='now'||current<0);if(id==='now')syncNow();if(id==='folders')renderFolders();if(id==='favorites')renderFavorites();if(id==='albums')renderAlbums();if(id==='artists')renderArtists();window.scrollTo(0,0)}$$('[data-page]').forEach(b=>b.addEventListener('click',()=>page(b.dataset.page))); $$('.back').forEach(b=>b.addEventListener('click',()=>goBack())); function goBack(){if(historyPages.length>1)historyPages.pop();const target=historyPages[historyPages.length-1]||'home';window.__pageBack=true;page(target)} window.addEventListener('keydown',e=>{if((e.key==='Escape'||e.key==='Backspace')&&!['INPUT','TEXTAREA'].includes(document.activeElement.tagName)){e.preventDefault();goBack()}});function addFiles(files){let added=0;for(const f of files){if(!f.type.startsWith('audio/')&&!/\.(mp3|m4a|aac|wav|ogg|flac|opus)$/i.test(f.name))continue;let path=f.webkitRelativePath||f.name;if(tracks.some(t=>t.name===f.name&&t.size===f.size&&t.path===path))continue;tracks.push({name:f.name.replace(/\.[^.]+$/,''),artist:'Local audio',album:'Unknown album',path,size:f.size,url:URL.createObjectURL(f),file:f,native:false});added++}renderAll();toast(added?`Added ${added} local audio file(s).`:'No new audio files found.');}$('#scan').onclick=()=>{if('showDirectoryPicker'in window){$('#folderPicker').click()}else $('#folderPicker').click()};$('#folderPicker').addEventListener('change',e=>addFiles(e.target.files));$('#filePicker').addEventListener('change',e=>addFiles(e.target.files));function songRow(t,i){const active=i===current;return `<div class="song ${active?'is-playing':''}" data-song-row="${i}"><div class="art ${colors[i%4]} ${active?'playing-art':''}">${active&&!isPaused()?'♫':'♫'}</div><button class="songinfo" data-play="${i}"><b>${esc(t.name)}${active?' <span class=\"playing-badge\">'+(isPaused()?'PAUSED':'PLAYING')+'</span>':''}</b><small>${active?(isPaused()?'Ⅱ Paused · ':'♫ Now playing · '):''}${esc(t.path.includes('/')?t.path.split('/').slice(0,-1).join(' / '):'Local audio')} · ${esc(t.artist)}</small></button><button class="more" data-fav="${i}" title="Favorite">${favs.has(i)?'♥':'♡'}</button></div>`}function fillList(id,arr){$(id).innerHTML=arr.length?arr.map(i=>songRow(tracks[i],i)).join(''):'<p class="muted">No music loaded yet. In browser preview, use the ↻ button to select a music folder. Android app will scan local music after permission is granted.</p>'}function renderAll(){let all=tracks.map((_,i)=>i);fillList('#recent',all.slice(-5).reverse());fillList('#allSongs',all);fillList('#libraryRecent',all.slice(-6).reverse());$('#songCount').textContent=tracks.length+' tracks';$('#countBadge').textContent=tracks.length+' songs';$('#favCount').textContent=favs.size+' saved';renderFavorites();bindRows()}function bindRows(){$$('[data-play]').forEach(b=>b.onclick=()=>playTrack(+b.dataset.play));$$('[data-fav]').forEach(b=>b.onclick=()=>{let i=+b.dataset.fav;favs.has(i)?favs.delete(i):favs.add(i);renderAll()})}async function playTrack(i){if(i<0||i>=tracks.length)return;current=i;const t=tracks[i];if(Capacitor.isNativePlatform()&&t.native&&t.uri){nativePlayback=true;nativeIsPlaying=false;nativePosition=0;nativeDuration=Number(t.duration||0)/1000;audio.pause();try{await NativePlayer.setQueue({items:tracks.filter(x=>x.native&&x.uri).map(x=>({id:String(x.id||x.uri),uri:x.uri,title:x.name,artist:x.artist})),startIndex:tracks.filter(x=>x.native&&x.uri).findIndex(x=>String(x.id||x.uri)===String(t.id||t.uri))});await NativePlayer.playAt({index:tracks.filter(x=>x.native&&x.uri).findIndex(x=>String(x.id||x.uri)===String(t.id||t.uri))});nativeIsPlaying=true;$('#mini').classList.remove('hidden');syncNow();page('now');await NativePlayer.setRepeatOne({enabled:repeatMode===2});await pollNativeState()}catch(e){nativeIsPlaying=false;syncNow();toast('Could not play this audio file on this device.');console.error(e)}return;}nativePlayback=false;audio.src=t.uri||t.url;audio.playbackRate=playbackSpeed;audio.play().then(()=>{$('#mini').classList.remove('hidden');syncNow();page('now')}).catch(()=>{syncNow();page('now');toast('Tap Play to start this local track.')});$('#mini').classList.remove('hidden');syncNow()}function isPaused(){return nativePlayback?!nativeIsPlaying:audio.paused}function syncNow(){if(current<0)return;let t=tracks[current];$('#nowTitle').textContent=t.name;$('#nowArtist').textContent=t.path.includes('/')?t.path.split('/').slice(0,-1).join(' / '):'Local audio';$('#miniTitle').textContent=t.name;$('#miniArtist').textContent='Local audio';$('#play').textContent=isPaused()?'▶':'Ⅱ';$('#miniPlay').textContent=isPaused()?'▶':'Ⅱ';$('#likeNow').innerHTML=(favs.has(current)?'♥ Remove from favorites':'♡ Add to favorites');$('#bigart').textContent='♫';updatePlayingRows()}function updatePlayingRows(){ $$('[data-song-row]').forEach(row=>{const i=Number(row.dataset.songRow),active=i===current;row.classList.toggle('is-playing',active);const info=row.querySelector('.songinfo');if(!info)return;const title=info.querySelector('b'),sub=info.querySelector('small');if(!title||!sub)return;title.innerHTML=esc(tracks[i]?.name||'')+(active?' <span class="playing-badge">'+(isPaused()?'PAUSED':'PLAYING')+'</span>':'');const t=tracks[i];sub.textContent=(active?(isPaused()?'Ⅱ Paused · ':'♫ Now playing · '):'')+(t?.path?.includes('/')?t.path.split('/').slice(0,-1).join(' / '):'Local audio')+' · '+(t?.artist||'Local audio')})}$('#play').onclick=async()=>{if(current<0){if(tracks.length)playTrack(0);else toast('No songs loaded.');return}if(nativePlayback){try{if(nativeIsPlaying)await NativePlayer.pause();else await NativePlayer.resume();await pollNativeState()}catch(e){toast('Playback control failed.')}return;}audio.paused?audio.play():audio.pause();syncNow()};$('#miniPlay').onclick=()=>$('#play').click();function trackFolder(t){const p=String(t?.path||t?.relativePath||'');return p.includes('/')?p.split('/').slice(0,-1).join('/'):'Root / Selected files'}function shufflePool(){if(shuffleMode===1&&current>=0){const folder=trackFolder(tracks[current]);const ids=tracks.map((t,i)=>({t,i})).filter(x=>trackFolder(x.t)===folder).map(x=>x.i);return ids.length?ids:tracks.map((_,i)=>i)}return tracks.map((_,i)=>i)}function step(d){if(!tracks.length)return;let n;if(shuffleMode){const pool=shufflePool();const choices=pool.filter(i=>i!==current);n=choices.length?choices[Math.floor(Math.random()*choices.length)]:current}else n=(Math.max(0,current)+d+tracks.length)%tracks.length;playTrack(n)}$('#next').onclick=()=>step(1);$('#prev').onclick=()=>{if(nativePlayback){if(nativePosition>3000){NativePlayer.seekTo({positionMs:0});nativePosition=0;syncTimeline()}else step(-1)}else if(audio.currentTime>3)audio.currentTime=0;else step(-1)};$('#miniNext').onclick=()=>step(1);audio.addEventListener('play',syncNow);audio.addEventListener('pause',syncNow);audio.addEventListener('ended',()=>{if(repeatMode===2){audio.currentTime=0;audio.play()}else if(repeatMode===1)step(1)});audio.addEventListener('timeupdate',()=>{if(audio.duration){if(!seekDragging)$('#seek').value=audio.currentTime/audio.duration*1000;$('#elapsed').textContent=fmt(audio.currentTime);$('#duration').textContent=fmt(audio.duration)}});
 let seekDragging=false,seekTouched=false,seekCommitPending=false,seekRequestId=0,seekSyncHoldUntil=0;
 const seek=$('#seek');
 function seekDurationSeconds(){
@@ -167,175 +229,4 @@ async function scanAndroidLibrary(){
 }
 $('#scan').onclick=async()=>{if(nativeMode){await scanAndroidLibrary();return;}$('#folderPicker').click()};
 (async()=>{if(Capacitor.isNativePlatform()){await scanAndroidLibrary()}
-// ---------- Offline MP3 Tools: local decode/process/export only; no network requests ----------
-const MP3_TOOL_INFO={
- cut:{title:'MP3 Cutter',desc:'Choose one audio file, set the start/end time, preview the range, then export the selected part as WAV.'},
- merge:{title:'MP3 Merger',desc:'Select two or more local audio files. They are joined in the order shown in the file picker and exported as WAV.'},
- convert:{title:'Audio Converter',desc:'Convert a supported local audio file to uncompressed WAV. WAV is used because this offline build has no bundled MP3 encoder.'},
- volume:{title:'Volume / Normalize',desc:'Normalize the audio peak to a safe target level, or apply a gain adjustment, then export as WAV.'},
- tags:{title:'MP3 Tag Editor',desc:'Edit ID3 title, artist and album tags in an MP3 file. The original MP3 is preserved and a new tagged copy is saved.'},
- fade:{title:'Fade In / Out',desc:'Apply fade-in and fade-out to a local audio file, then export as WAV.'}
-};
-let activeMP3Tool='',selectedToolFiles=[];
-function toolEl(id){return document.getElementById(id)}
-function openMP3Tool(key){
-  activeMP3Tool=key;selectedToolFiles=[];
-  const info=MP3_TOOL_INFO[key];toolEl('toolModalTitle').textContent=info.title;
-  toolEl('toolDescription').textContent=info.desc;toolEl('toolFileLabel').textContent=key==='merge'?'Choose 2 or more audio files':key==='tags'?'Choose one MP3 file':'Choose audio file';
-  toolEl('toolFileNames').textContent='No files selected';toolEl('toolFiles').value='';
-  toolEl('toolStatus').textContent='';toolEl('toolOptions').innerHTML=buildToolOptions(key);
-  toolEl('runTool').textContent=key==='tags'?'Save tagged MP3 copy':'Process and save new file';
-  toolEl('runTool').disabled=false;toolEl('toolModal').hidden=false;
-}
-function buildToolOptions(key){
-  if(key==='cut')return '<div class="tool-field-row"><label>Start (seconds)<input id="cutStart" type="number" min="0" step="0.1" value="0"></label><label>End (seconds)<input id="cutEnd" type="number" min="0.1" step="0.1" value="30"></label></div><p class="tool-hint">Times are in seconds. End must be greater than start.</p>';
-  if(key==='volume')return '<label class="tool-field">Loudness mode<select id="volumeMode"><option value="normalize">Normalize peak (recommended)</option><option value="gain">Manual gain</option></select></label><label class="tool-field">Gain / target dB<input id="volumeDb" type="number" min="-12" max="12" step="1" value="0"></label>';
-  if(key==='fade')return '<div class="tool-field-row"><label>Fade in (seconds)<input id="fadeIn" type="number" min="0" step="0.1" value="2"></label><label>Fade out (seconds)<input id="fadeOut" type="number" min="0" step="0.1" value="3"></label></div>';
-  if(key==='tags')return '<label class="tool-field">Title<input id="tagTitle" type="text" maxlength="200" placeholder="Song title"></label><label class="tool-field">Artist<input id="tagArtist" type="text" maxlength="200" placeholder="Artist"></label><label class="tool-field">Album<input id="tagAlbum" type="text" maxlength="200" placeholder="Album"></label><p class="tool-hint">ID3v2.3 text tags only. Artwork is not changed.</p>';
-  if(key==='merge')return '<p class="tool-hint">Files are joined in picker order. Different sample rates are converted to a common WAV sample rate during export.</p>';
-  return '<p class="tool-hint">Output: WAV (44.1 kHz PCM). Processing runs locally on this device.</p>';
-}
-toolEl('closeToolModal').onclick=()=>toolEl('toolModal').hidden=true;
-toolEl('toolModal').addEventListener('click',e=>{if(e.target===toolEl('toolModal'))toolEl('toolModal').hidden=true;});
-document.querySelectorAll('[data-tool]').forEach(b=>b.addEventListener('click',()=>openMP3Tool(b.dataset.tool)));
-toolEl('toolFiles').addEventListener('change',()=>{
-  selectedToolFiles=[...toolEl('toolFiles').files];
-  toolEl('toolFileNames').textContent=selectedToolFiles.length?selectedToolFiles.map(f=>f.name).join(', '):'No files selected';
-  if(activeMP3Tool==='cut'&&selectedToolFiles[0]) {
-    const a=document.createElement('audio');a.preload='metadata';a.src=URL.createObjectURL(selectedToolFiles[0]);
-    a.onloadedmetadata=()=>{const end=toolEl('cutEnd');if(end&&Number(end.value)===30&&Number.isFinite(a.duration))end.value=Math.max(.1,a.duration.toFixed(1));URL.revokeObjectURL(a.src);};
-  }
-  if(activeMP3Tool==='tags'&&selectedToolFiles[0]){
-    const n=selectedToolFiles[0].name.replace(/\.[^.]+$/,'');
-    if(!toolEl('tagTitle').value)toolEl('tagTitle').value=n;
-  }
-});
-function toolStatus(msg){toolEl('toolStatus').textContent=msg}
-function audioContextForTools(){const AC=window.AudioContext||window.webkitAudioContext;if(!AC)throw new Error('Audio decoding is not supported on this device.');return new AC()}
-async function decodeToolFile(file,ctx){
-  const ab=await file.arrayBuffer();
-  try{return await ctx.decodeAudioData(ab.slice(0));}
-  catch(e){throw new Error('Cannot decode "'+file.name+'". This format may not be supported by Android WebView.');}
-}
-function createAudioBufferFromChannels(channels,sampleRate){
-  const length=channels[0]?.length||0;
-  const AC=window.AudioContext||window.webkitAudioContext;
-  const ctx=new AC({sampleRate});
-  const b=ctx.createBuffer(channels.length,length,sampleRate);
-  channels.forEach((ch,i)=>b.copyToChannel(ch, i));
-  ctx.close();return b;
-}
-function audioBufferToWav(buffer){
-  const channels=buffer.numberOfChannels,rate=buffer.sampleRate,length=buffer.length;
-  const bytes=44+length*channels*2,ab=new ArrayBuffer(bytes),v=new DataView(ab);
-  const write=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
-  write(0,'RIFF');v.setUint32(4,bytes-8,true);write(8,'WAVE');write(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,channels,true);v.setUint32(24,rate,true);v.setUint32(28,rate*channels*2,true);v.setUint16(32,channels*2,true);v.setUint16(34,16,true);write(36,'data');v.setUint32(40,bytes-44,true);
-  let offset=44;
-  for(let i=0;i<length;i++)for(let c=0;c<channels;c++){let s=Math.max(-1,Math.min(1,buffer.getChannelData(c)[i]));v.setInt16(offset,s<0?s*32768:s*32767,true);offset+=2;}
-  return new Blob([ab],{type:'audio/wav'});
-}
-function concatAudioBuffers(buffers){
-  const rate=44100,channels=Math.max(...buffers.map(b=>Math.min(2,b.numberOfChannels)));
-  const parts=buffers.map(b=>{
-    const len=Math.ceil(b.duration*rate),out=Array.from({length:channels},()=>new Float32Array(len));
-    for(let c=0;c<channels;c++){const src=b.getChannelData(Math.min(c,b.numberOfChannels-1));for(let i=0;i<len;i++){const pos=i*b.sampleRate/rate,lo=Math.floor(pos),hi=Math.min(src.length-1,lo+1),f=pos-lo;out[c][i]=(src[lo]||0)*(1-f)+(src[hi]||0)*f;}}
-    return out;
-  });
-  const joined=Array.from({length:channels},(_,c)=>{const out=new Float32Array(parts.reduce((n,p)=>n+p[c].length,0));let off=0;for(const p of parts){out.set(p[c],off);off+=p[c].length;}return out;});
-  const AC=window.AudioContext||window.webkitAudioContext,ctx=new AC({sampleRate:rate}),buf=ctx.createBuffer(channels,joined[0].length,rate);joined.forEach((x,c)=>buf.copyToChannel(x,c));ctx.close();return buf;
-}
-function processBuffer(buffer,mode){
-  const channels=Array.from({length:buffer.numberOfChannels},(_,i)=>new Float32Array(buffer.getChannelData(i)));
-  if(mode==='volume'){
-    const db=Number(toolEl('volumeDb').value||0),m=toolEl('volumeMode').value;
-    let peak=0;channels.forEach(ch=>ch.forEach(x=>peak=Math.max(peak,Math.abs(x))));
-    const gain=m==='normalize'?(peak>0?Math.pow(10,Math.min(0.0,db)/20)/peak:1):Math.pow(10,Math.max(-12,Math.min(12,db))/20);
-    channels.forEach(ch=>{for(let i=0;i<ch.length;i++)ch[i]=Math.max(-1,Math.min(1,ch[i]*gain));});
-  }
-  if(mode==='fade'){
-    const fi=Math.max(0,Number(toolEl('fadeIn').value||0)),fo=Math.max(0,Number(toolEl('fadeOut').value||0)),dur=buffer.duration;
-    if(fi+fo>dur)throw new Error('Fade in plus fade out must not exceed the audio duration.');
-    channels.forEach(ch=>{for(let i=0;i<ch.length;i++){const t=i/buffer.sampleRate;let g=1;if(fi>0&&t<fi)g=Math.min(g,t/fi);if(fo>0&&t>dur-fo)g=Math.min(g,(dur-t)/fo);ch[i]*=Math.max(0,g);}});
-  }
-  const AC=window.AudioContext||window.webkitAudioContext,ctx=new AC({sampleRate:buffer.sampleRate}),out=ctx.createBuffer(channels.length,channels[0].length,buffer.sampleRate);channels.forEach((ch,i)=>out.copyToChannel(ch,i));ctx.close();return out;
-}
-function cropBuffer(buffer,start,end){
-  const a=Math.max(0,Math.floor(start*buffer.sampleRate)),b=Math.min(buffer.length,Math.floor(end*buffer.sampleRate));
-  if(b<=a)throw new Error('End time must be greater than start time.');
-  const AC=window.AudioContext||window.webkitAudioContext,ctx=new AC({sampleRate:buffer.sampleRate}),out=ctx.createBuffer(buffer.numberOfChannels,b-a,buffer.sampleRate);
-  for(let c=0;c<buffer.numberOfChannels;c++)out.copyToChannel(buffer.getChannelData(c).slice(a,b),c);ctx.close();return out;
-}
-function synchsafe(n){return [(n>>21)&127,(n>>14)&127,(n>>7)&127,n&127]}
-function id3TextFrame(id,text){
-  // ID3v2.4 supports UTF-8 text (encoding byte 0x03) and synchsafe frame sizes.
-  const data=new TextEncoder().encode('\x03'+text),frame=new Uint8Array(10+data.length);
-  for(let i=0;i<4;i++)frame[i]=id.charCodeAt(i);
-  frame.set(synchsafe(data.length),4);
-  frame[8]=0; frame[9]=0;
-  frame.set(data,10);
-  return frame;
-}
-function stripExistingId3Tags(input){
-  let start=0,end=input.length;
-  // Remove an existing ID3v2 tag before writing the replacement, avoiding stacked tags.
-  if(end>=10&&input[0]===0x49&&input[1]===0x44&&input[2]===0x33){
-    const size=((input[6]&0x7f)<<21)|((input[7]&0x7f)<<14)|((input[8]&0x7f)<<7)|(input[9]&0x7f);
-    const total=Math.min(end,10+size);
-    if(total>=10)start=total;
-  }
-  // Remove an ID3v1 128-byte trailer if present; new metadata is stored in ID3v2.4.
-  if(end-start>=128&&input[end-128]===0x54&&input[end-127]===0x41&&input[end-126]===0x47)end-=128;
-  if(start>=end)throw new Error('This MP3 file has no audio data after its metadata.');
-  return input.slice(start,end);
-}
-async function makeTaggedMp3(file,title,artist,album){
-  if(!file.name.toLowerCase().endsWith('.mp3'))throw new Error('MP3 Tag Editor currently supports .mp3 files only.');
-  const frames=[['TIT2',title],['TPE1',artist],['TALB',album]].filter(x=>String(x[1]||'').trim()).map(x=>id3TextFrame(x[0],String(x[1])));
-  const size=frames.reduce((n,x)=>n+x.length,0),header=new Uint8Array(10);
-  // ID3v2.4 header: UTF-8 text frames and syncsafe tag size.
-  header.set([0x49,0x44,0x33,4,0,0,...synchsafe(size)]);
-  const original=new Uint8Array(await file.arrayBuffer());
-  const audio=stripExistingId3Tags(original);
-  return new Blob([header,...frames,audio],{type:'audio/mpeg'});
-}
-function safeFilename(s){return (s||'audio').replace(/\.[^.]+$/,'').replace(/[\\/:*?"<>|]+/g,'_').trim().slice(0,100)||'audio'}
-async function saveToolBlob(blob,filename){
-  if(Capacitor.isNativePlatform()){
-    const bytes=new Uint8Array(await blob.arrayBuffer());let bin='';const step=0x8000;for(let i=0;i<bytes.length;i+=step)bin+=String.fromCharCode(...bytes.subarray(i,Math.min(i+step,bytes.length)));
-    const base64=btoa(bin);
-    const result=await Filesystem.writeFile({path:'MerajMusic/MP3Tools/'+filename,data:base64,directory:Directory.Documents,recursive:true});
-    return 'Saved to Documents/MerajMusic/MP3Tools/'+filename;
-  }
-  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);return 'Download started: '+filename;
-}
-toolEl('runTool').addEventListener('click',async()=>{
-  const key=activeMP3Tool,files=selectedToolFiles.slice();
-  if(!files.length){toolStatus('Please choose an audio file first.');return;}
-  if(key==='merge'&&files.length<2){toolStatus('Select at least two audio files to merge.');return;}
-  if(key!=='merge'&&files.length>1&&key!=='tags'){toolStatus('Please select one file for this tool.');return;}
-  if(key==='tags'&&files.length!==1){toolStatus('Select one MP3 file.');return;}
-  toolEl('runTool').disabled=true;toolStatus('Processing offline…');
-  try{
-    let blob,name;
-    if(key==='tags'){
-      blob=await makeTaggedMp3(files[0],toolEl('tagTitle').value,toolEl('tagArtist').value,toolEl('tagAlbum').value);
-      name=safeFilename(toolEl('tagTitle').value||files[0].name)+'-tagged.mp3';
-    }else{
-      const ctx=audioContextForTools();let buffers=[];
-      try{for(const f of files)buffers.push(await decodeToolFile(f,ctx));}finally{await ctx.close();}
-      let output;
-      if(key==='cut'){
-        const start=Number(toolEl('cutStart').value||0),end=Number(toolEl('cutEnd').value||0);
-        if(start<0||end<=start||end>buffers[0].duration)throw new Error('Choose valid start/end times. File duration: '+buffers[0].duration.toFixed(2)+' seconds.');
-        output=cropBuffer(buffers[0],start,end);
-      }else if(key==='merge')output=concatAudioBuffers(buffers);
-      else if(key==='volume'||key==='fade')output=processBuffer(buffers[0],key);
-      else output=buffers[0];
-      blob=audioBufferToWav(output);
-      name=safeFilename(files[0].name)+(key==='merge'?'-merged':key==='cut'?'-cut':key==='volume'?'-normalized':key==='fade'?'-faded':'-converted')+'.wav';
-    }
-    const msg=await saveToolBlob(blob,name);toolStatus(msg+'. Original file was not changed.');
-  }catch(e){console.error('MP3 Tools processing failed',e);toolStatus(e.message||'Could not process this audio file.');}
-  finally{toolEl('runTool').disabled=false;}
-});
 renderAll();})();

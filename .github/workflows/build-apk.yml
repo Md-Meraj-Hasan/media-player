@@ -56,6 +56,11 @@ jobs:
             exit 1
           fi
 
+          if [ ! -f video-player.html ] || [ ! -d video-src ]; then
+            echo "ERROR: embedded video player page/assets are missing."
+            exit 1
+          fi
+
           if [ ! -f scripts/strip-internet-permission.cjs ]; then
             echo "ERROR: Internet permission script is missing."
             exit 1
@@ -131,13 +136,19 @@ jobs:
             exit 1
           fi
 
+          if ! grep -q 'android.permission.READ_MEDIA_VIDEO' "$MANIFEST"; then
+            echo "ERROR: READ_MEDIA_VIDEO permission is missing."
+            cat "$MANIFEST"
+            exit 1
+          fi
+
           if ! grep -q 'android.permission.READ_EXTERNAL_STORAGE' "$MANIFEST"; then
             echo "ERROR: Legacy media read permission is missing."
             cat "$MANIFEST"
             exit 1
           fi
 
-          echo "Internet permission block and audio permissions verified."
+          echo "Internet permission block plus audio/video permissions verified."
 
       - name: Build debug APK
         working-directory: android

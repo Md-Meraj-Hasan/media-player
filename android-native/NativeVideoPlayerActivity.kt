@@ -69,6 +69,7 @@ class NativeVideoPlayerActivity : Activity() {
 
         val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         videoLayout = VLCVideoLayout(this)
+        videoLayout.elevation = 0f
         root.addView(videoLayout, FrameLayout.LayoutParams(-1, -1))
 
         // Overlay controls are siblings above VLC's video surface so the surface cannot cover them.
@@ -76,6 +77,7 @@ class NativeVideoPlayerActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.TRANSPARENT)
             isClickable = false
+            elevation = 100f
         }
         val top = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
@@ -111,7 +113,13 @@ class NativeVideoPlayerActivity : Activity() {
                 if (p.isPlaying) p.pause() else p.play()
             }
         }
-        row.addView(playButton, LinearLayout.LayoutParams(58, 48))
+        row.addView(playButton, LinearLayout.LayoutParams(54, 48))
+        val back10 = text("↶ 10s", 14f).apply {
+            contentDescription = "Back 10 seconds"
+            isClickable = true
+            setOnClickListener { player?.let { it.time = (it.time - 10_000L).coerceAtLeast(0L) } }
+        }
+        row.addView(back10, LinearLayout.LayoutParams(70, 48))
         status = text("0:00 / 0:00", 13f).apply { gravity = Gravity.CENTER_VERTICAL }
         row.addView(status, LinearLayout.LayoutParams(0, 48, 1f))
         val speed = text("1×", 15f).apply {
@@ -126,7 +134,44 @@ class NativeVideoPlayerActivity : Activity() {
             }
         }
         row.addView(speed, LinearLayout.LayoutParams(64, 48))
+        val forward10 = text("10s ↷", 14f).apply {
+            contentDescription = "Forward 10 seconds"
+            isClickable = true
+            setOnClickListener { player?.let { p -> p.time = (p.time + 10_000L).coerceAtMost(p.length.coerceAtLeast(0L)) } }
+        }
+        row.addView(forward10, LinearLayout.LayoutParams(76, 48))
         controls.addView(row)
+        val optionsRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        val fit = text("FIT", 13f).apply {
+            contentDescription = "Change video fit mode"
+            isClickable = true
+            var idx = 0
+            val ratios: Array<String?> = arrayOf(null, "16:9", "4:3")
+            val labels = arrayOf("FIT", "16:9", "4:3")
+            setOnClickListener {
+                idx = (idx + 1) % ratios.size
+                player?.setAspectRatio(ratios[idx])
+                text = labels[idx]
+            }
+        }
+        optionsRow.addView(fit, LinearLayout.LayoutParams(64, 40))
+        val rotate = text("ROTATE", 13f).apply {
+            contentDescription = "Toggle orientation"
+            isClickable = true
+            setOnClickListener {
+                requestedOrientation = if (requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE)
+                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            }
+        }
+        optionsRow.addView(rotate, LinearLayout.LayoutParams(88, 40))
+        val stop = text("STOP", 13f).apply {
+            contentDescription = "Stop playback"
+            isClickable = true
+            setOnClickListener { player?.stop(); finish() }
+        }
+        optionsRow.addView(stop, LinearLayout.LayoutParams(68, 40))
+        controls.addView(optionsRow)
         seek = SeekBar(this).apply { contentDescription = "Seek video" }
         seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onStartTrackingTouch(bar: SeekBar) { dragging = true }
@@ -142,6 +187,7 @@ class NativeVideoPlayerActivity : Activity() {
         overlay.addView(controls)
         root.addView(overlay, FrameLayout.LayoutParams(-1, -1, Gravity.TOP))
         setContentView(root)
+        overlay.bringToFront()
 
         val rawUri = intent.getStringExtra(EXTRA_URI) ?: intent.dataString
         if (rawUri.isNullOrBlank()) {
@@ -153,6 +199,11 @@ class NativeVideoPlayerActivity : Activity() {
             vlc = LibVLC(this, arrayListOf("--no-video-title-show", "--audio-time-stretch", "--verbose=2"))
             player = MediaPlayer(vlc).also { p ->
                 p.attachViews(videoLayout, null, false, false)
+                // VLC's SurfaceView can otherwise visually cover sibling controls on some devices.
+                window.decorView.post {
+                    overlay.bringToFront()
+                    overlay.invalidate()
+                }
                 p.setEventListener { event ->
                     runOnUiThread {
                         when (event.type) {

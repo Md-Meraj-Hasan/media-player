@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <title>Meraj Video</title>
+  <link rel="stylesheet" href="./video-src/css/style.css">
+</head>
+<body>
+  <main class="app" id="app">
+    
+    <!-- 1. VIDEO LIBRARY VIEW (Folders + All Videos) -->
+    <div class="library-view" id="libraryView">
+      <div class="lib-topbar">
+        <button class="topbtn" id="libBackBtn" title="Back to Audio">✕</button>
+        <div class="lib-tabs">
+          <button class="tab-btn active" id="tabVideos">Videos</button>
+          <button class="tab-btn" id="tabFolders">Folders</button>
+        </div>
+        <button class="topbtn" id="libScanBtn">⟳ Scan</button>
+        <input type="file" id="videoPicker" accept="video/*" multiple hidden>
+      </div>
+
+      <div class="folder-chip-bar" id="folderChips" hidden></div>
+
+      <div class="video-grid" id="videoGrid">
+        <div class="empty-state">
+          <p>Tap <b>⟳ Scan</b> to load your local videos.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. FULLSCREEN VIDEO PLAYER VIEW -->
+    <div class="player-view hidden" id="playerView">
+      
+      <!-- Top Bar -->
+      <div class="toolbar ui" id="toolbar">
+        <div class="top-left">
+          <button class="topbtn" id="collapseBtn" title="Back to Library">←</button>
+          <div class="speed-wrap">
+            <button class="topbtn" id="speedBtn">1× ▾</button>
+            <div class="speed-menu" id="speedMenu" hidden>
+              <button data-speed="0.5">0.5×</button>
+              <button data-speed="0.75">0.75×</button>
+              <button data-speed="1">1× Normal</button>
+              <button data-speed="1.25">1.25×</button>
+              <button data-speed="1.5">1.5×</button>
+              <button data-speed="2">2×</button>
+            </div>
+          </div>
+          <div class="title" id="title">Playing Video</div>
+        </div>
+        <div class="top-right">
+          <button class="topbtn" id="shareBtn" title="Share Video">↗ Share</button>
+        </div>
+      </div>
+
+      <!-- Main Stage -->
+      <section class="stage" id="stage">
+        <video class="video" id="video" playsinline webkit-playsinline></video>
+        <div class="brightness-layer" id="brightness"></div>
+        <div class="hint" id="hint">Tap video for controls</div>
+        
+        <!-- Center Controls -->
+        <div class="center-controls ui" id="center">
+          <button class="ctl" id="backBtn" aria-label="Rewind 10s">↶<small style="font-size:10px;margin-left:-2px">10</small></button>
+          <button class="ctl play" id="playBtn" aria-label="Play/Pause">▶</button>
+          <button class="ctl" id="forwardBtn" aria-label="Forward 10s">↷<small style="font-size:10px;margin-left:-2px">10</small></button>
+        </div>
+
+        <!-- Seekbar -->
+        <div class="seek-area ui" id="seekArea">
+          <input class="seekbar" id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
+          <div class="times">
+            <span id="current">00:00</span>
+            <span id="duration">00:00</span>
+          </div>
+        </div>
+
+        <div class="level-line" id="levelLine"></div>
+        <div class="locked-badge">🔒 Locked (Tap screen to unlock)</div>
+        <button class="unlock-tap" id="unlockTap" hidden></button>
+      </section>
+
+      <!-- Bottom Controls + Horizontal Thumbnail Strip -->
+      <footer class="bottom ui" id="bottom">
+        <div class="icon-row">
+          <button class="icon-btn" id="lockBtn" title="Lock controls">🔒</button>
+          <button class="icon-btn" id="volBtn" title="Mute/Unmute">🔊</button>
+          <button class="icon-btn" id="fitBtn" title="Fit/Fill">⛶</button>
+          <button class="icon-btn" id="rotateBtn" title="Rotate Landscape">⤢</button>
+          <button class="icon-btn" id="repeatBtn" title="Replay">⟳</button>
+        </div>
+        <!-- Horizontal Scrollable Thumbnail Bar -->
+        <div class="thumbs" id="thumbs" aria-label="Video list horizontal"></div>
+      </footer>
+    </div>
+
+  </main>
+
+  <script type="module" src="./video-src/js/app.js"></script>
+</body>
+        </html>
+            

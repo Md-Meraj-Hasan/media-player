@@ -1,10 +1,12 @@
 package com.meraj.mediaplayer
 
 import android.app.Activity
-import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.ParcelFileDescriptor
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
@@ -25,103 +27,168 @@ class NativeVideoPlayerActivity : Activity() {
         const val EXTRA_QUEUE_URIS = "queueUris"
         const val EXTRA_QUEUE_TITLES = "queueTitles"
         const val EXTRA_QUEUE_MIMES = "queueMimes"
+        private const val TAG = "MerajLibVLCVideo"
     }
     private var vlc: LibVLC? = null
     private var player: MediaPlayer? = null
+    private var pfd: ParcelFileDescriptor? = null
     private lateinit var videoLayout: VLCVideoLayout
     private lateinit var status: TextView
     private lateinit var playButton: TextView
     private lateinit var seek: SeekBar
+    private lateinit var titleView: TextView
     private var dragging = false
-    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val handler = Handler(Looper.getMainLooper())
+
     private val progress = object : Runnable {
         override fun run() {
             val p = player ?: return
             val duration = p.length.coerceAtLeast(0L)
-            if (!dragging && duration > 0) {
-                seek.max = duration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+            if (!dragging && duration > 0L) {
+                seek.max = duration.coerceAtMost(Int.MAX_VALUE.toLong()).toInt().coerceAtLeast(1)
                 seek.progress = p.time.coerceIn(0L, duration).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
             }
             status.text = "${time(p.time)} / ${time(duration)}"
-            handler.postDelayed(this, 400)
+            handler.postDelayed(this, 300)
         }
     }
     private fun time(ms: Long): String {
-        val s = (ms.coerceAtLeast(0L) / 1000).toInt()
-        return "${s / 60}:${(s % 60).toString().padStart(2, '0')}"
+        val seconds = (ms.coerceAtLeast(0L) / 1000).toInt()
+        return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
     }
+    private fun text(value: String, size: Float): TextView = TextView(this).apply {
+        text = value; textSize = size; setTextColor(Color.WHITE); gravity = Gravity.CENTER
+        setPadding(12, 8, 12, 8)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.decorView.systemUiVisibility = (View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.BLACK) }
-        val top = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(12, 6, 12, 6) }
-        val title = TextView(this).apply {
-            text = intent.getStringExtra(EXTRA_TITLE) ?: "Video"
-            setTextColor(Color.WHITE); textSize = 16f
-        }
-        top.addView(title, LinearLayout.LayoutParams(0, 44, 1f))
-        val close = TextView(this).apply { text = "✕"; setTextColor(Color.WHITE); textSize = 22f; gravity = Gravity.CENTER; setPadding(12, 0, 12, 0); setOnClickListener { finish() } }
-        top.addView(close)
-        root.addView(top)
+        window.statusBarColor = Color.BLACK
+        window.navigationBarColor = Color.BLACK
+
+        val root = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
         videoLayout = VLCVideoLayout(this)
-        root.addView(videoLayout, LinearLayout.LayoutParams(-1, 0, 1f))
-        val controls = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(12, 4, 12, 12) }
+        root.addView(videoLayout, FrameLayout.LayoutParams(-1, -1))
+
+        // Overlay controls are siblings above VLC's video surface so the surface cannot cover them.
+        val overlay = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.TRANSPARENT)
+            isClickable = false
+        }
+        val top = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(8, 4, 8, 4)
+            setBackgroundColor(0x99000000.toInt())
+        }
+        titleView = text(intent.getStringExtra(EXTRA_TITLE) ?: "Video", 16f).apply {
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        top.addView(titleView, LinearLayout.LayoutParams(0, 48, 1f))
+        val close = text("✕", 23f).apply {
+            contentDescription = "Close video"
+            isClickable = true
+            setOnClickListener { finish() }
+        }
+        top.addView(close, LinearLayout.LayoutParams(52, 48))
+        overlay.addView(top)
+
+        val spacer = View(this)
+        overlay.addView(spacer, LinearLayout.LayoutParams(-1, 0, 1f))
+
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(10, 4, 10, 8)
+            setBackgroundColor(0xCC000000.toInt())
+        }
         val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        playButton = TextView(this).apply {
-            text = "Ⅱ"; setTextColor(Color.WHITE); textSize = 24f; gravity = Gravity.CENTER
-            setPadding(18, 8, 18, 8)
-            setOnClickListener { val p = player ?: return@setOnClickListener; if (p.isPlaying) { p.pause(); text = "▶" } else { p.play(); text = "Ⅱ" } }
+        playButton = text("Ⅱ", 24f).apply {
+            contentDescription = "Play or pause"
+            isClickable = true
+            setOnClickListener {
+                val p = player ?: return@setOnClickListener
+                if (p.isPlaying) p.pause() else p.play()
+            }
         }
-        row.addView(playButton)
-        status = TextView(this).apply { setTextColor(Color.WHITE); textSize = 13f; gravity = Gravity.CENTER_VERTICAL }
-        row.addView(status, LinearLayout.LayoutParams(0, -2, 1f))
-        val speed = TextView(this).apply {
-            text = "1×"; setTextColor(Color.WHITE); textSize = 16f; setPadding(12, 8, 12, 8)
-            var idx = 0
-            setOnClickListener { val rates = floatArrayOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f); idx = (idx + 1) % rates.size; player?.setRate(rates[idx]); text = "${rates[idx]}×" }
+        row.addView(playButton, LinearLayout.LayoutParams(58, 48))
+        status = text("0:00 / 0:00", 13f).apply { gravity = Gravity.CENTER_VERTICAL }
+        row.addView(status, LinearLayout.LayoutParams(0, 48, 1f))
+        val speed = text("1×", 15f).apply {
+            contentDescription = "Playback speed"
+            isClickable = true
+            var idx = 2
+            val rates = floatArrayOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
+            setOnClickListener {
+                idx = (idx + 1) % rates.size
+                player?.setRate(rates[idx])
+                text = "${rates[idx]}×"
+            }
         }
-        row.addView(speed)
+        row.addView(speed, LinearLayout.LayoutParams(64, 48))
         controls.addView(row)
-        seek = SeekBar(this)
+        seek = SeekBar(this).apply { contentDescription = "Seek video" }
         seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onStartTrackingTouch(bar: SeekBar) { dragging = true }
-            override fun onStopTrackingTouch(bar: SeekBar) { player?.time = bar.progress.toLong(); dragging = false }
-            override fun onProgressChanged(bar: SeekBar, value: Int, fromUser: Boolean) { if (fromUser) status.text = time(value.toLong()) }
+            override fun onStopTrackingTouch(bar: SeekBar) {
+                player?.time = bar.progress.toLong()
+                dragging = false
+            }
+            override fun onProgressChanged(bar: SeekBar, value: Int, fromUser: Boolean) {
+                if (fromUser) status.text = "${time(value.toLong())} / ${time(player?.length ?: 0L)}"
+            }
         })
         controls.addView(seek)
-        root.addView(controls)
+        overlay.addView(controls)
+        root.addView(overlay, FrameLayout.LayoutParams(-1, -1, Gravity.TOP))
         setContentView(root)
+
+        val rawUri = intent.getStringExtra(EXTRA_URI) ?: intent.dataString
+        if (rawUri.isNullOrBlank()) {
+            Toast.makeText(this, "Video URI missing", Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         try {
-            vlc = LibVLC(this, arrayListOf("--no-video-title-show", "--audio-time-stretch"))
+            vlc = LibVLC(this, arrayListOf("--no-video-title-show", "--audio-time-stretch", "--verbose=2"))
             player = MediaPlayer(vlc).also { p ->
                 p.attachViews(videoLayout, null, false, false)
                 p.setEventListener { event ->
-                    when (event.type) {
-                        MediaPlayer.Event.Playing -> runOnUiThread { playButton.text = "Ⅱ" }
-                        MediaPlayer.Event.Paused, MediaPlayer.Event.Stopped -> runOnUiThread { playButton.text = "▶" }
-                        MediaPlayer.Event.EncounteredError -> runOnUiThread { Toast.makeText(this, "LibVLC could not play this media/codec.", Toast.LENGTH_LONG).show() }
+                    runOnUiThread {
+                        when (event.type) {
+                            MediaPlayer.Event.Playing -> playButton.text = "Ⅱ"
+                            MediaPlayer.Event.Paused, MediaPlayer.Event.Stopped -> playButton.text = "▶"
+                            MediaPlayer.Event.EncounteredError -> {
+                                android.util.Log.e(TAG, "LibVLC encountered a playback error for $rawUri")
+                                Toast.makeText(this, "LibVLC could not open this media. Check file access/codec.", Toast.LENGTH_LONG).show()
+                            }
+                        }
                     }
                 }
-                val uri = intent.getStringExtra(EXTRA_URI) ?: intent.dataString
-                if (uri.isNullOrBlank()) { Toast.makeText(this, "Video URI missing", Toast.LENGTH_LONG).show(); finish(); return }
-                val media = Media(vlc, Uri.parse(uri))
+                val uri = Uri.parse(rawUri)
+                val media = if (uri.scheme == "content") {
+                    pfd = contentResolver.openFileDescriptor(uri, "r")
+                        ?: throw IllegalStateException("Android could not open this file. Re-select it and grant access.")
+                    Media(vlc, pfd!!.fileDescriptor)
+                } else Media(vlc, uri)
                 p.media = media
                 media.release()
                 p.play()
             }
             handler.post(progress)
         } catch (e: Exception) {
-            android.util.Log.e("NiceMultimediaVideo", "LibVLC video startup failed", e)
-            Toast.makeText(this, "Could not start LibVLC video player", Toast.LENGTH_LONG).show()
-            finish()
+            android.util.Log.e(TAG, "LibVLC video startup failed for $rawUri", e)
+            Toast.makeText(this, "Video open failed: ${e.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
         }
     }
+
     override fun onDestroy() {
         handler.removeCallbacks(progress)
-        player?.stop()
-        player?.detachViews()
+        try { player?.stop() } catch (_: Exception) {}
+        try { player?.detachViews() } catch (_: Exception) {}
         player?.release(); player = null
+        try { pfd?.close() } catch (_: Exception) {}
+        pfd = null
         vlc?.release(); vlc = null
         super.onDestroy()
     }

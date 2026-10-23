@@ -1,5 +1,4 @@
-<uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
-<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+
   
 const fs = require("fs");
 const path = require("path");

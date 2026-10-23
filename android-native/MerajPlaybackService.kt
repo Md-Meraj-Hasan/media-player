@@ -23,11 +23,6 @@ class MerajPlaybackService : MediaSessionService() {
         val sessionActivity = launchIntent?.let {
             PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
-        @Suppress("DEPRECATION")
-        override fun onBackPressed() {
-        webView.evaluateJavascript("window.postMessage('meraj-video-parent-hide')", null)
-        super.onBackPressed()
-        }
         
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(C.USAGE_MEDIA)

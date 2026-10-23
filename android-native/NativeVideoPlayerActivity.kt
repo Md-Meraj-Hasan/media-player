@@ -33,9 +33,11 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Yahan apni layout file ka naam check karein (jaise R.layout.activity_main)
+        // ⚠️ YAHAN APNI XML FILE KA NAAM CHECK KAREIN
+        // Agar aapki XML file ka naam activity_video_player.xml hai toh R.layout.activity_video_player likhein
         setContentView(R.layout.activity_native_video_player) 
 
+        // Views Initialize
         playerView = findViewById(R.id.playerView)
         controlsLayout = findViewById(R.id.controlsLayout)
         bottomControls = findViewById(R.id.bottomControls)
@@ -46,10 +48,12 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
         tvCurrentTime = findViewById(R.id.tvCurrentTime)
         tvTotalTime = findViewById(R.id.tvTotalTime)
 
+        // ExoPlayer Initialize
         player = ExoPlayer.Builder(this).build()
         playerView.player = player
 
-        val videoUri = intent.getStringExtra("VIDEO_URI") ?: "" 
+        // Video Path Receive karein (Constants ka use karke)
+        val videoUri = intent.getStringExtra(EXTRA_URI) ?: "" 
         if (videoUri.isNotEmpty()) {
             val mediaItem = MediaItem.fromUri(videoUri)
             player.setMediaItem(mediaItem)
@@ -57,6 +61,7 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
             player.playWhenReady = true
         }
 
+        // Play/Pause Button
         btnPlayPause.setOnClickListener {
             if (player.isPlaying) {
                 player.pause()
@@ -66,11 +71,13 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
             showControls()
         }
 
+        // Forward Button (10 Seconds)
         btnForward.setOnClickListener {
             player.seekTo(player.currentPosition + 10000)
             showControls()
         }
 
+        // Rewind Button (10 Seconds)
         btnRewind.setOnClickListener {
             val newPos = player.currentPosition - 10000
             if (newPos > 0) {
@@ -81,6 +88,7 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
             showControls()
         }
 
+        // Screen Touch par controls show/hide
         playerView.setOnClickListener {
             if (controlsLayout.visibility == View.VISIBLE) {
                 hideControls()
@@ -89,6 +97,7 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
             }
         }
 
+        // SeekBar Logic
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -103,6 +112,7 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
             }
         })
 
+        // Player State Listener
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {
@@ -152,5 +162,14 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
         super.onDestroy()
         player.release()
         hideHandler.removeCallbacks(hideRunnable)
+    }
+
+    // 👇 YEH CONSTANTS ZAROORI HAIN (Inse aapki MediaLibraryScannerPlugin.kt ke error hatenge) 👇
+    companion object {
+        const val EXTRA_URI = "EXTRA_URI"
+        const val EXTRA_TITLE = "EXTRA_TITLE"
+        const val EXTRA_QUEUE_URIS = "EXTRA_QUEUE_URIS"
+        const val EXTRA_QUEUE_TITLES = "EXTRA_QUEUE_TITLES"
+        const val EXTRA_QUEUE_MIMES = "EXTRA_QUEUE_MIMES"
     }
 }

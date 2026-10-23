@@ -67,10 +67,7 @@ class MerajMediaPlayerPlugin : Plugin() {
         currentIndex = index
         val p = player ?: return
         val track = queue[index]
-        val media = Media(libVLC, Uri.parse(track.uri)).apply {
-            setMeta(Media.Meta.Title, track.title)
-            setMeta(Media.Meta.Artist, track.artist)
-        }
+        val media = Media(libVLC, Uri.parse(track.uri))
         p.media = media
         media.release()
         p.setRate(speed)

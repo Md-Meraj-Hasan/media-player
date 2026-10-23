@@ -1,5 +1,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { App } from '@capacitor/app';
+
+import { App } from '@capacitor/app';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 // Share the currently selected audio file via Android's native share sheet.
@@ -541,6 +543,24 @@ async function scanAndroidLibrary() {
     }
     return true;
 }
+App.addListener('backButton', () => {
+  const videoPage = document.getElementById('videoPlayer');
+  const nowPage = document.getElementById('now');
+
+  // Agar video player khula hai toh Home par bhej de
+  if (videoPage && videoPage.classList.contains('active')) {
+    page('home');
+  } 
+  // Agar Now Playing screen khuli hai toh bhi Home par bhej de
+  else if (nowPage && nowPage.classList.contains('active')) {
+    page('home');
+  } 
+  // Agar pehle se Home par hain tab app close karein
+  else {
+    App.exitApp();
+  }
+});
+
 window.addEventListener('message', (e) => {
   if (e.data && e.data.type === 'NAVIGATE_PAGE') {
     page(e.data.target || 'home');

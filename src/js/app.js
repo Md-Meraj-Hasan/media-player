@@ -1,7 +1,5 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { App } from '@capacitor/app';
-
-import { App } from '@capacitor/app';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 // Share the currently selected audio file via Android's native share sheet.

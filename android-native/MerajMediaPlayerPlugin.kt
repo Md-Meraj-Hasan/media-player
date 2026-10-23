@@ -68,13 +68,17 @@ class MerajMediaPlayerPlugin : Plugin() {
         currentIndex = index
         val p = player ?: return
         val track = queue[index]
+        val instance = libVLC ?: run {
+            notifyListeners("playbackError", JSObject().put("message", "LibVLC is not initialized yet"))
+            return
+        }
         val resolved = try { LibVlcUriResolver.resolve(context, track.uri) } catch (e: Exception) {
             android.util.Log.e("MerajMediaPlayer", "Cannot resolve media URI=${track.uri}", e)
             notifyListeners("playbackError", JSObject().put("message", e.message ?: "Cannot access selected media"))
             return
         }
         android.util.Log.i("MerajMediaPlayer", "Opening audio: scheme=${resolved.scheme}, path=${resolved.lastPathSegment}, index=$index")
-        val media = Media(libVLC, resolved)
+        val media = Media(instance, resolved)
         media.setEventListener { event -> android.util.Log.i("MerajMediaPlayer", "Media event type=${event.type}, uri=${track.uri}") }
         p.media = media
         media.release()

@@ -47,19 +47,12 @@ if (mainActivity) {
 }
 
 const activityDir = path.dirname(mainActivity);
-for (const name of ['MediaPermissionPlugin.kt', 'MediaLibraryScannerPlugin.kt', 'MerajMediaPlayerPlugin.kt', 'NativeVideoPlayerActivity.kt', 'LibVlcUriResolver.kt']) {
+for (const name of ['MediaPermissionPlugin.kt', 'MediaLibraryScannerPlugin.kt', 'MerajMediaPlayerPlugin.kt', 'MerajPlaybackService.kt', 'NativeVideoPlayerActivity.kt']) {
   const source = path.join(nativeRoot, name);
   if (!fs.existsSync(source)) throw new Error(`Required native plugin source missing: ${source}`);
   let code = fs.readFileSync(source, 'utf8');
-  code = code.replace(/^\s*package\s+[A-Za-z0-9_.]+\s*;?\s*$/m, `package ${packageName}`);
-  const destination = path.join(activityDir, name);
-  fs.writeFileSync(destination, code);
-  // Fail immediately if a source was copied with the wrong package or wasn't emitted.
-  const copied = fs.readFileSync(destination, 'utf8');
-  const copiedPackage = copied.match(/^\s*package\s+([A-Za-z0-9_.]+)\s*;?/m);
-  if (!copiedPackage || copiedPackage[1] !== packageName) {
-    throw new Error(`Native source ${name} has wrong package after integration: ${copiedPackage?.[1] || 'missing'} (expected ${packageName})`);
-  }
+  code = code.replace(/^\s*package\s+[A-Za-z0-9_.]+\s*$/m, `package ${packageName}`);
+  fs.writeFileSync(path.join(activityDir, name), code);
 }
 
 // Register plugins in the actual generated MainActivity, whether Kotlin or Java.
@@ -105,16 +98,6 @@ if (!main.includes('MerajMediaPlayerPlugin::class.java') && !main.includes('Mera
 }
 fs.writeFileSync(mainActivity, main);
 
-// Verify every Kotlin dependency used by the native player is in the exact package directory.
-for (const name of ['LibVlcUriResolver.kt', 'MerajMediaPlayerPlugin.kt', 'NativeVideoPlayerActivity.kt']) {
-  const target = path.join(activityDir, name);
-  if (!fs.existsSync(target)) throw new Error(`Native media source was not copied: ${target}`);
-  const text = fs.readFileSync(target, 'utf8');
-  if (!new RegExp('^\\s*object\\s+LibVlcUriResolver\\b', 'm').test(text) && name === 'LibVlcUriResolver.kt') {
-    throw new Error(`LibVlcUriResolver object declaration missing from ${target}`);
-  }
-}
-
 let xml = fs.readFileSync(manifest, 'utf8');
 const permissions = [
   '<uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />',
@@ -153,20 +136,36 @@ ensureKotlinGradlePlugin();
 
 const appGradle = path.join(appRoot, 'build.gradle');
 let gradleText = fs.readFileSync(appGradle, 'utf8');
-// Remove any old Media3/ExoPlayer dependencies and add LibVLC Android.
-gradleText = gradleText.replace(/^\s*implementation\s+['"]androidx\.media3:[^'"]+['"]\s*;?\s*$/gm, '');
-gradleText = gradleText.replace(/^\s*implementation\s+['"]com\.google\.android\.exoplayer:[^'"]+['"]\s*;?\s*$/gm, '');
-if (!gradleText.includes('org.videolan.android:libvlc-all')) {
+if (!gradleText.includes('androidx.media3:media3-exoplayer')) {
   if (!/dependencies\s*\{/.test(gradleText)) throw new Error('Could not find dependencies block in android/app/build.gradle');
-  gradleText = gradleText.replace(/dependencies\s*\{/, match => `${match}\n    implementation 'org.videolan.android:libvlc-all:3.6.0'`);
+  gradleText = gradleText.replace(/dependencies\s*\{/, match => `${match}\n    implementation 'androidx.media3:media3-exoplayer:1.5.1'\n    implementation 'androidx.media3:media3-session:1.5.1'`);
+  fs.writeFileSync(appGradle, gradleText);
+} else if (!gradleText.includes('androidx.media3:media3-session')) {
+  gradleText = gradleText.replace(/dependencies\s*\{/, match => `${match}\n    implementation 'androidx.media3:media3-session:1.5.1'`);
+  fs.writeFileSync(appGradle, gradleText);
 }
-fs.writeFileSync(appGradle, gradleText);
 
-// Register the full-screen LibVLC video activity. The audio player is an in-process
-// LibVLC plugin and no Media3 service is required.
+
+if (!gradleText.includes('androidx.media3:media3-ui')) {
+  gradleText = gradleText.replace(/dependencies\s*\{/, match => `${match}\n    implementation 'androidx.media3:media3-ui:1.5.1'`);
+  fs.writeFileSync(appGradle, gradleText);
+}
+
+// Register the MediaSessionService and foreground playback permissions.
+xml = fs.readFileSync(manifest, 'utf8');
+const servicePermissions = [
+  '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
+  '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />'
+];
+for (const permission of servicePermissions) {
+  if (!xml.includes(permission)) xml = xml.replace(/<manifest\b[^>]*>/, match => `${match}\n    ${permission}`);
+}
 if (!xml.includes('NativeVideoPlayerActivity')) {
   xml = xml.replace(/<application\b[^>]*>/, match => `${match}\n        <activity android:name=".NativeVideoPlayerActivity" android:exported="false" android:screenOrientation="unspecified" android:configChanges="orientation|screenSize|keyboardHidden" />`);
 }
+if (!xml.includes('MerajPlaybackService')) {
+  xml = xml.replace(/<application\b[^>]*>/, match => `${match}\n        <service android:name=".MerajPlaybackService" android:foregroundServiceType="mediaPlayback" android:exported="true">\n            <intent-filter>\n                <action android:name="androidx.media3.session.MediaSessionService" />\n            </intent-filter>\n        </service>`);
+}
 fs.writeFileSync(manifest, xml);
 
-console.log(`LibVLC audio plugin and direct-URI video activity copied and registered in ${mainActivity}; Media3/ExoPlayer dependencies removed.`);
+console.log(`Native Media3 audio service/plugin and direct-URI video activity copied and registered in ${mainActivity}; media permissions and ExoPlayer/session/UI dependencies configured.`);

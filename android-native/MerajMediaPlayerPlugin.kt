@@ -3,7 +3,6 @@ package com.meraj.mediaplayer
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import android.os.ParcelFileDescriptor
 import com.getcapacitor.JSArray
 import com.getcapacitor.JSObject
 import com.getcapacitor.Plugin
@@ -19,7 +18,6 @@ class MerajMediaPlayerPlugin : Plugin() {
     private val handler = Handler(Looper.getMainLooper())
     private var libVLC: LibVLC? = null
     private var player: MediaPlayer? = null
-    private var activePfd: ParcelFileDescriptor? = null
     private data class Track(val uri: String, val title: String, val artist: String, val id: String)
     private val queue = mutableListOf<Track>()
     private var currentIndex = -1
@@ -30,7 +28,7 @@ class MerajMediaPlayerPlugin : Plugin() {
         super.load()
         handler.post {
             try {
-                libVLC = LibVLC(context, arrayListOf("--no-video-title-show", "--audio-time-stretch", "--verbose=2"))
+                libVLC = LibVLC(context, arrayListOf("--no-video-title-show", "--audio-time-stretch"))
                 player = MediaPlayer(libVLC).also { p ->
                     p.setEventListener { event ->
                         when (event.type) {
@@ -40,10 +38,6 @@ class MerajMediaPlayerPlugin : Plugin() {
                             MediaPlayer.Event.EndReached -> {
                                 notifyListeners("trackEnded", JSObject())
                                 if (repeatOne) playCurrent() else playNext()
-                            }
-                            MediaPlayer.Event.EncounteredError -> {
-                                android.util.Log.e("MerajMediaPlayer", "LibVLC audio playback encountered an error at index=$currentIndex uri=${queue.getOrNull(currentIndex)?.uri}")
-                                notifyListeners("playbackError", JSObject().put("message", "LibVLC could not open this local media URI.").put("uri", queue.getOrNull(currentIndex)?.uri ?: ""))
                             }
                         }
                     }
@@ -57,53 +51,37 @@ class MerajMediaPlayerPlugin : Plugin() {
     private fun emitState() {
         val p = player ?: return
         val media = p.media
-        notifyListeners("playbackState", JSObject().apply {
+        val state = JSObject().apply {
             put("isPlaying", p.isPlaying)
             put("position", p.time.coerceAtLeast(0L))
             put("duration", (media?.duration ?: 0L).coerceAtLeast(0L))
             put("playbackState", if (p.isPlaying) 3 else if (p.time > 0) 2 else 1)
             put("currentIndex", currentIndex)
             put("mediaId", queue.getOrNull(currentIndex)?.id ?: "")
-        })
-    }
-
-    private fun createMedia(uriString: String): Media {
-        val uri = Uri.parse(uriString)
-        if (uri.scheme == "content") {
-            val pfd = context.contentResolver.openFileDescriptor(uri, "r")
-                ?: throw IllegalStateException("Android could not open this media URI. Re-select the file and grant access.")
-            activePfd?.close()
-            activePfd = pfd
-            return Media(libVLC, pfd.fileDescriptor)
         }
-        return Media(libVLC, uri)
+        notifyListeners("playbackState", state)
     }
 
     private fun openTrack(index: Int, autoplay: Boolean = true) {
         if (index !in queue.indices) return
         currentIndex = index
         val p = player ?: return
-        try {
-            val track = queue[index]
-            val media = createMedia(track.uri)
-            p.media = media
-            media.release()
-            p.setRate(speed)
-            if (autoplay) p.play()
-            notifyListeners("trackChanged", JSObject().apply {
-                put("mediaId", track.id); put("title", track.title); put("reason", 0)
-            })
-            emitState()
-        } catch (e: Exception) {
-            android.util.Log.e("MerajMediaPlayer", "Failed opening audio URI ${queue[index].uri}", e)
-            notifyListeners("playbackError", JSObject().put("message", e.message ?: "Could not open media").put("uri", queue[index].uri))
-        }
+        val track = queue[index]
+        val media = Media(libVLC, Uri.parse(track.uri))
+        p.media = media
+        media.release()
+        p.setRate(speed)
+        if (autoplay) p.play()
+        notifyListeners("trackChanged", JSObject().apply {
+            put("mediaId", track.id); put("title", track.title); put("reason", 0)
+        })
+        emitState()
     }
 
     private fun playCurrent() { if (currentIndex in queue.indices) openTrack(currentIndex) }
     private fun playNext() {
         if (queue.isEmpty()) return
-        val next = if (currentIndex + 1 < queue.size) currentIndex + 1 else -1
+        val next = if (currentIndex + 1 < queue.size) currentIndex + 1 else if (repeatOne) currentIndex else -1
         if (next >= 0) openTrack(next) else { player?.stop(); emitState() }
     }
     private fun withPlayer(call: PluginCall, action: (MediaPlayer) -> Unit) {
@@ -122,7 +100,9 @@ class MerajMediaPlayerPlugin : Plugin() {
         for (i in 0 until items.length()) {
             val item = items.optJSONObject(i) ?: continue
             val uri = item.optString("uri", "")
-            if (uri.isNotBlank()) parsed.add(Track(uri, item.optString("title", "Local audio"), item.optString("artist", "Unknown artist"), item.optString("id", uri)))
+            if (uri.isBlank()) continue
+            parsed.add(Track(uri, item.optString("title", "Local audio"),
+                item.optString("artist", "Unknown artist"), item.optString("id", uri)))
         }
         if (parsed.isEmpty()) { call.reject("No playable local media URIs were supplied."); return }
         handler.post {
@@ -176,13 +156,16 @@ class MerajMediaPlayerPlugin : Plugin() {
         if (v == null || !v.isFinite() || v < 0.5 || v > 2.0) call.reject("Playback speed must be between 0.5 and 2.0.")
         else { speed = v.toFloat(); p.setRate(speed); call.resolve(JSObject().put("speed", v).put("accepted", true)) }
     }
-    @PluginMethod fun getEqualizerPresets(call: PluginCall) { call.resolve(JSObject().put("presets", JSArray())) }
-    @PluginMethod fun setEqualizerPreset(call: PluginCall) { call.reject("Equalizer presets are not implemented in this LibVLC migration yet.") }
+    @PluginMethod fun getEqualizerPresets(call: PluginCall) {
+        call.resolve(JSObject().put("presets", JSArray()))
+    }
+    @PluginMethod fun setEqualizerPreset(call: PluginCall) {
+        call.reject("Equalizer presets are not implemented in this LibVLC migration yet.")
+    }
     override fun handleOnDestroy() {
         handler.post {
             player?.stop()
             player?.release(); player = null
-            activePfd?.close(); activePfd = null
             libVLC?.release(); libVLC = null
             queue.clear()
         }

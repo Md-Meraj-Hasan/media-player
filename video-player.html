@@ -12,7 +12,7 @@
     <!-- Top Bar -->
     <div class="toolbar ui" id="toolbar">
       <div class="top-left">
-        <button class="topbtn" id="collapseBtn" title="Back to Library">✕</button>
+        <button class="topbtn" id="collapseBtn" title="Back to Audio/Home">✕</button>
         <div class="speed-wrap">
           <button class="topbtn" id="speedBtn">1× ▾</button>
           <div class="speed-menu" id="speedMenu" hidden>
@@ -22,19 +22,14 @@
             <button data-speed="1.25">1.25×</button>
             <button data-speed="1.5">1.5×</button>
             <button data-speed="1.75">1.75×</button>
-            <div class="top-right">
-  <button class="topbtn" id="scanVideosBtn">⟳ Scan</button>
-  <input type="file" id="videoPicker" accept="video/*" multiple hidden>
-  <button class="topbtn" id="shareBtn">↗ Share</button>
-            </div>
-            
             <button data-speed="2">2×</button>
           </div>
         </div>
-        <div class="title" id="title">Video</div>
+        <div class="title" id="title">Choose or Scan Video</div>
       </div>
       <div class="top-right">
-        <button class="topbtn" id="shareBtn">↗ Share</button>
+        <button class="topbtn" id="scanVideosBtn">⟳ Scan Videos</button>
+        <input type="file" id="videoPicker" accept="video/*" multiple hidden>
       </div>
     </div>
 
@@ -42,16 +37,16 @@
     <section class="stage" id="stage">
       <video class="video" id="video" playsinline></video>
       <div class="brightness-layer" id="brightness"></div>
-      <div class="hint" id="hint">Tap to show/hide controls · Swipe sides for brightness/volume</div>
+      <div class="hint" id="hint">Tap video for controls · Swipe edges for Brightness/Volume</div>
       
-      <!-- Center Controls (10s Back, Play/Pause, 10s Forward) -->
+      <!-- Center Controls -->
       <div class="center-controls ui" id="center">
-        <button class="ctl" id="backBtn" aria-label="Back 10s">↶<small style="font-size:10px;margin-left:-3px">10</small></button>
+        <button class="ctl" id="backBtn" aria-label="Seek back 10 seconds">↶<small style="font-size:10px;margin-left:-3px">10</small></button>
         <button class="ctl play" id="playBtn" aria-label="Play/Pause">▶</button>
-        <button class="ctl" id="forwardBtn" aria-label="Forward 10s">↷<small style="font-size:10px;margin-left:-3px">10</small></button>
+        <button class="ctl" id="forwardBtn" aria-label="Seek forward 10 seconds">↷<small style="font-size:10px;margin-left:-3px">10</small></button>
       </div>
 
-      <!-- Seekbar and Timestamps -->
+      <!-- Seekbar and Time -->
       <div class="seek-area ui" id="seekArea">
         <input class="seekbar" id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
         <div class="times">
@@ -65,17 +60,15 @@
       <button class="unlock-tap" id="unlockTap" hidden aria-label="Unlock controls"></button>
     </section>
 
-    <!-- Bottom Actions & Thumbnails Strip -->
+    <!-- Bottom Actions and Thumbnails Strip -->
     <footer class="bottom ui" id="bottom">
       <div class="icon-row">
-        <button class="icon-btn" id="lockBtn" title="Lock">🔒</button>
+        <button class="icon-btn" id="lockBtn" title="Lock controls">🔒</button>
         <button class="icon-btn" id="volBtn" title="Mute/Unmute">🔊</button>
         <button class="icon-btn" id="fitBtn" title="Fit/Fill">⛶</button>
-        <button class="icon-btn" id="pipBtn" title="Picture in Picture">▣</button>
         <button class="icon-btn" id="repeatBtn" title="Replay">⟳</button>
-        <button class="icon-btn" id="rotateBtn" title="Rotate">⤢</button>
       </div>
-      <div class="thumbs" id="thumbs" aria-label="Video thumbnail playlist"></div>
+      <div class="thumbs" id="thumbs" aria-label="Video list"></div>
     </footer>
   </main>
 

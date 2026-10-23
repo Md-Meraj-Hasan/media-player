@@ -1032,6 +1032,21 @@
             videoSpeedButton.setAttribute("aria-label", `Playback speed ${rate}x`);
             videoSpeedButton.title = `Playback speed: ${rate}x`;
         }
+        // Top-left 'X' button dabane par parent app ko 'home' ya previous page par bhejega
+const collapseBtn = document.getElementById('collapseBtn');
+if (collapseBtn) {
+  collapseBtn.onclick = () => {
+    // 1. Agar video play ho rahi hai to pause karein
+    const video = document.getElementById('video');
+    if (video) video.pause();
+
+    // 2. Parent window (Main Audio App) ko page change karne ka message bhejein
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'NAVIGATE_PAGE', target: 'home' }, '*');
+    }
+  };
+}
+        
         const label = $("video-overlay-speed-label");
         if (label)
             label.textContent = `${rate}×`;

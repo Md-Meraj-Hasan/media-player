@@ -85,13 +85,18 @@ class NativeVideoPlayerActivity : Activity() {
     private fun loadVideo(uriString: String, title: String? = null) {
         try {
             currentUri = uriString
-            val media = Media(vlc ?: return, Uri.parse(uriString))
+            val instance = vlc ?: return
+            val resolved = LibVlcUriResolver.resolve(this, uriString)
+            android.util.Log.i("NiceMultimediaVideo", "Opening media: scheme=${resolved.scheme}, path=${resolved.lastPathSegment}")
+            val media = Media(instance, resolved).apply {
+                setEventListener { event -> android.util.Log.i("NiceMultimediaVideo", "Media event type=${event.type}") }
+            }
             player?.media = media
             media.release()
             player?.play()
             playButton.text = "Ⅱ"
             title?.let { (findViewById<TextView>(1001))?.text = it }
-        } catch (e: Exception) { Toast.makeText(this, "Unable to open video", Toast.LENGTH_SHORT).show() }
+        } catch (e: Exception) { android.util.Log.e("NiceMultimediaVideo", "Unable to resolve/open video URI=$uriString", e); Toast.makeText(this, "Unable to open video: ${e.message ?: "media access error"}", Toast.LENGTH_LONG).show() }
     }
     private fun makeThumbnail(uriString: String): Bitmap? {
         return try {
@@ -204,12 +209,19 @@ class NativeVideoPlayerActivity : Activity() {
             currentUri = uri
             player = MediaPlayer(vlc).also { p ->
                 p.attachViews(videoLayout, null, false, false)
-                p.setEventListener { event -> when (event.type) {
-                    MediaPlayer.Event.Playing -> runOnUiThread { playButton.text = "Ⅱ" }
-                    MediaPlayer.Event.Paused, MediaPlayer.Event.Stopped -> runOnUiThread { playButton.text = "▶" }
-                    MediaPlayer.Event.EncounteredError -> runOnUiThread { Toast.makeText(this, "LibVLC could not play this media/codec.", Toast.LENGTH_LONG).show() }
-                } }
-                val media = Media(vlc, Uri.parse(uri)); p.media = media; media.release(); p.play()
+                p.setEventListener { event ->
+                    android.util.Log.i("NiceMultimediaVideo", "Player event type=${event.type}, time=${p.time}, length=${p.length}")
+                    when (event.type) {
+                        MediaPlayer.Event.Playing -> runOnUiThread { playButton.text = "Ⅱ" }
+                        MediaPlayer.Event.Paused, MediaPlayer.Event.Stopped -> runOnUiThread { playButton.text = "▶" }
+                        MediaPlayer.Event.EncounteredError -> runOnUiThread { Toast.makeText(this, "LibVLC playback failed. Check NiceMultimediaVideo/MerajVlcUri logs.", Toast.LENGTH_LONG).show() }
+                    }
+                }
+                val resolved = LibVlcUriResolver.resolve(this, uri)
+                android.util.Log.i("NiceMultimediaVideo", "Initial open: scheme=${resolved.scheme}, path=${resolved.lastPathSegment}")
+                val media = Media(vlc, resolved)
+                media.setEventListener { event -> android.util.Log.i("NiceMultimediaVideo", "Media event type=${event.type}") }
+                p.media = media; media.release(); p.play()
             }
             val allUris = if (queueUris.isNotEmpty()) queueUris else arrayListOf(uri)
             val allTitles = if (queueTitles.isNotEmpty()) queueTitles else arrayListOf(intent.getStringExtra(EXTRA_TITLE) ?: "Video")

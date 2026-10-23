@@ -541,6 +541,12 @@ async function scanAndroidLibrary() {
     }
     return true;
 }
+window.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'NAVIGATE_PAGE') {
+    page(e.data.target || 'home');
+  }
+});
+
 $('#scan').onclick = async () => { if (nativeMode) {
     await scanAndroidLibrary();
     return;

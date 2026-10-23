@@ -94,8 +94,13 @@ jobs:
       - name: Verify built HTML and local assets
         run: node scripts/verify-web-assets.cjs dist
 
-      - name: Generate Android project
-        run: npx cap add android
+      - name: Sync Android project
+        run: |
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+     
 
       - name: Integrate native media permissions and scanner
         run: node scripts/integrate-native-media.cjs

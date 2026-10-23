@@ -60,6 +60,26 @@
         getThumbnail: payload => callParentNative('getThumbnail', payload),
         shareMedia: payload => callParentNative('shareMedia', payload)
     };
+    const scanBtn = document.getElementById('scanVideosBtn');
+const picker = document.getElementById('videoPicker');
+
+if (scanBtn && picker) {
+  scanBtn.onclick = () => picker.click();
+  picker.onchange = (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+
+    const videoItems = files.map(f => ({
+      name: f.name,
+      url: URL.createObjectURL(f),
+      file: f
+    }));
+
+    // Pehla video play karein aur baaki list thumbnail me daalein
+    playVideoItem(videoItems[0], videoItems);
+  };
+}
+    
     const welcome = $("welcome-screen"), playerScreen = $("player-screen");
     const audio = $("audio-element"), video = $("video-element");
     const FAVORITES_KEY = "meraj-video-player-favorites-v1";

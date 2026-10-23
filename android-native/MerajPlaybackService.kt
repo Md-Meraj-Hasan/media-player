@@ -32,11 +32,11 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Yahan dhyan dein ki aapki XML file ka naam kya hai. 
-        // Agar aapne activity_main.xml banaya hai toh R.layout.activity_main likhein.
+        
+        // ⚠️ YAHAN APNI XML FILE KA NAAM CHECK KAREIN
+        // Agar aapki XML file ka naam activity_video_player.xml hai toh R.layout.activity_video_player likhein
         setContentView(R.layout.activity_native_video_player) 
 
-        // Views Initialize karein
         playerView = findViewById(R.id.playerView)
         controlsLayout = findViewById(R.id.controlsLayout)
         bottomControls = findViewById(R.id.bottomControls)
@@ -47,11 +47,9 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
         tvCurrentTime = findViewById(R.id.tvCurrentTime)
         tvTotalTime = findViewById(R.id.tvTotalTime)
 
-        // ExoPlayer Initialize karein
         player = ExoPlayer.Builder(this).build()
         playerView.player = player
 
-        // Video Path Receive karein (Intent se)
         val videoUri = intent.getStringExtra("VIDEO_URI") ?: "" 
         if (videoUri.isNotEmpty()) {
             val mediaItem = MediaItem.fromUri(videoUri)
@@ -60,7 +58,6 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
             player.playWhenReady = true
         }
 
-        // Play/Pause Button
         btnPlayPause.setOnClickListener {
             if (player.isPlaying) {
                 player.pause()
@@ -70,13 +67,11 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
             showControls()
         }
 
-        // Forward Button (10 Seconds)
         btnForward.setOnClickListener {
             player.seekTo(player.currentPosition + 10000)
             showControls()
         }
 
-        // Rewind Button (10 Seconds)
         btnRewind.setOnClickListener {
             val newPos = player.currentPosition - 10000
             if (newPos > 0) {
@@ -87,7 +82,6 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
             showControls()
         }
 
-        // Screen Touch par controls show/hide
         playerView.setOnClickListener {
             if (controlsLayout.visibility == View.VISIBLE) {
                 hideControls()
@@ -96,7 +90,6 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
             }
         }
 
-        // SeekBar Logic
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
@@ -111,7 +104,6 @@ class NativeVideoPlayerActivity : AppCompatActivity() {
             }
         })
 
-        // Player State Listener
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (isPlaying) {

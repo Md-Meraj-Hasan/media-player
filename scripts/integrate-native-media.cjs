@@ -47,12 +47,19 @@ if (mainActivity) {
 }
 
 const activityDir = path.dirname(mainActivity);
-for (const name of ['MediaPermissionPlugin.kt', 'MediaLibraryScannerPlugin.kt', 'MerajMediaPlayerPlugin.kt', 'NativeVideoPlayerActivity.kt']) {
+for (const name of ['MediaPermissionPlugin.kt', 'MediaLibraryScannerPlugin.kt', 'MerajMediaPlayerPlugin.kt', 'NativeVideoPlayerActivity.kt', 'LibVlcUriResolver.kt']) {
   const source = path.join(nativeRoot, name);
   if (!fs.existsSync(source)) throw new Error(`Required native plugin source missing: ${source}`);
   let code = fs.readFileSync(source, 'utf8');
-  code = code.replace(/^\s*package\s+[A-Za-z0-9_.]+\s*$/m, `package ${packageName}`);
-  fs.writeFileSync(path.join(activityDir, name), code);
+  code = code.replace(/^\s*package\s+[A-Za-z0-9_.]+\s*;?\s*$/m, `package ${packageName}`);
+  const destination = path.join(activityDir, name);
+  fs.writeFileSync(destination, code);
+  // Fail immediately if a source was copied with the wrong package or wasn't emitted.
+  const copied = fs.readFileSync(destination, 'utf8');
+  const copiedPackage = copied.match(/^\s*package\s+([A-Za-z0-9_.]+)\s*;?/m);
+  if (!copiedPackage || copiedPackage[1] !== packageName) {
+    throw new Error(`Native source ${name} has wrong package after integration: ${copiedPackage?.[1] || 'missing'} (expected ${packageName})`);
+  }
 }
 
 // Register plugins in the actual generated MainActivity, whether Kotlin or Java.
@@ -97,6 +104,16 @@ if (!main.includes('MerajMediaPlayerPlugin::class.java') && !main.includes('Mera
   main = main.replace(/registerPlugin\(MediaLibraryScannerPlugin(::class\.java|\.class)\);?/, match => match + (match.includes('::class') ? '\n        registerPlugin(MerajMediaPlayerPlugin::class.java)' : '\n        registerPlugin(MerajMediaPlayerPlugin.class);'));
 }
 fs.writeFileSync(mainActivity, main);
+
+// Verify every Kotlin dependency used by the native player is in the exact package directory.
+for (const name of ['LibVlcUriResolver.kt', 'MerajMediaPlayerPlugin.kt', 'NativeVideoPlayerActivity.kt']) {
+  const target = path.join(activityDir, name);
+  if (!fs.existsSync(target)) throw new Error(`Native media source was not copied: ${target}`);
+  const text = fs.readFileSync(target, 'utf8');
+  if (!new RegExp('^\\s*object\\s+LibVlcUriResolver\\b', 'm').test(text) && name === 'LibVlcUriResolver.kt') {
+    throw new Error(`LibVlcUriResolver object declaration missing from ${target}`);
+  }
+}
 
 let xml = fs.readFileSync(manifest, 'utf8');
 const permissions = [

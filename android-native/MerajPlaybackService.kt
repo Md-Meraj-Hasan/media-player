@@ -1,157 +1,103 @@
-package com.meraj.mediaplayer
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black">
 
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.view.View
-import android.widget.ImageButton
-import android.widget.LinearLayout
-import android.widget.SeekBar
-import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
+    <!-- VIDEO SURFACE -->
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/playerView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:use_controller="false"
+        app:resize_mode="fit"
+        app:surface_type="surface_view" />
 
-class NativeVideoPlayerActivity : AppCompatActivity() {
+    <!-- CUSTOM CONTROLS OVERLAY -->
+    <LinearLayout
+        android:id="@+id/controlsLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#40000000"
+        android:clickable="true"
+        android:focusable="true"
+        android:gravity="center"
+        android:orientation="vertical">
 
-    private lateinit var player: ExoPlayer
-    private lateinit var playerView: PlayerView
-    private lateinit var controlsLayout: LinearLayout
-    private lateinit var bottomControls: LinearLayout
-    private lateinit var btnPlayPause: ImageButton
-    private lateinit var btnRewind: ImageButton
-    private lateinit var btnForward: ImageButton
-    private lateinit var seekBar: SeekBar
-    private lateinit var tvCurrentTime: TextView
-    private lateinit var tvTotalTime: TextView
+        <!-- Center Play/Pause & Seek Icons -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal">
 
-    private val hideHandler = Handler(Looper.getMainLooper())
-    private val hideRunnable = Runnable { hideControls() }
+            <ImageButton
+                android:id="@+id/btnRewind"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_media_rew"
+                app:tint="@android:color/white" />
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        
-        // ⚠️ YAHAN APNI XML FILE KA NAAM CHECK KAREIN
-        // Agar aapki XML file ka naam activity_video_player.xml hai toh R.layout.activity_video_player likhein
-        setContentView(R.layout.activity_native_video_player) 
+            <ImageButton
+                android:id="@+id/btnPlayPause"
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:layout_marginHorizontal="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_media_play"
+                app:tint="@android:color/white" />
 
-        playerView = findViewById(R.id.playerView)
-        controlsLayout = findViewById(R.id.controlsLayout)
-        bottomControls = findViewById(R.id.bottomControls)
-        btnPlayPause = findViewById(R.id.btnPlayPause)
-        btnRewind = findViewById(R.id.btnRewind)
-        btnForward = findViewById(R.id.btnForward)
-        seekBar = findViewById(R.id.seekBar)
-        tvCurrentTime = findViewById(R.id.tvCurrentTime)
-        tvTotalTime = findViewById(R.id.tvTotalTime)
+            <ImageButton
+                android:id="@+id/btnForward"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_media_ff"
+                app:tint="@android:color/white" />
+        </LinearLayout>
+    </LinearLayout>
 
-        player = ExoPlayer.Builder(this).build()
-        playerView.player = player
+    <!-- BOTTOM CONTROLS -->
+    <LinearLayout
+        android:id="@+id/bottomControls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#80000000"
+        android:orientation="vertical"
+        android:padding="16dp"
+        app:layout_constraintBottom_toBottomOf="parent">
 
-        val videoUri = intent.getStringExtra("VIDEO_URI") ?: "" 
-        if (videoUri.isNotEmpty()) {
-            val mediaItem = MediaItem.fromUri(videoUri)
-            player.setMediaItem(mediaItem)
-            player.prepare()
-            player.playWhenReady = true
-        }
+        <SeekBar
+            android:id="@+id/seekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:progressTint="@android:color/white"
+            android:thumbTint="@android:color/white" />
 
-        btnPlayPause.setOnClickListener {
-            if (player.isPlaying) {
-                player.pause()
-            } else {
-                player.play()
-            }
-            showControls()
-        }
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp">
 
-        btnForward.setOnClickListener {
-            player.seekTo(player.currentPosition + 10000)
-            showControls()
-        }
+            <TextView
+                android:id="@+id/tvCurrentTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textColor="@android:color/white"
+                android:textSize="14sp" />
 
-        btnRewind.setOnClickListener {
-            val newPos = player.currentPosition - 10000
-            if (newPos > 0) {
-                player.seekTo(newPos)
-            } else {
-                player.seekTo(0)
-            }
-            showControls()
-        }
+            <TextView
+                android:id="@+id/tvTotalTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentEnd="true"
+                android:text="00:00"
+                android:textColor="@android:color/white"
+                android:textSize="14sp" />
+        </RelativeLayout>
+    </LinearLayout>
 
-        playerView.setOnClickListener {
-            if (controlsLayout.visibility == View.VISIBLE) {
-                hideControls()
-            } else {
-                showControls()
-            }
-        }
-
-        seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    player.seekTo(progress.toLong())
-                }
-            }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {
-                hideHandler.removeCallbacks(hideRunnable)
-            }
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {
-                showControls()
-            }
-        })
-
-        player.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (isPlaying) {
-                    btnPlayPause.setImageResource(android.R.drawable.ic_media_pause)
-                    updateProgress()
-                    hideControls()
-                } else {
-                    btnPlayPause.setImageResource(android.R.drawable.ic_media_play)
-                    showControls()
-                }
-            }
-        })
-    }
-
-    private fun updateProgress() {
-        if (player.isPlaying) {
-            seekBar.max = player.duration.toInt()
-            seekBar.progress = player.currentPosition.toInt()
-            tvCurrentTime.text = formatTime(player.currentPosition)
-            tvTotalTime.text = formatTime(player.duration)
-            hideHandler.postDelayed({ updateProgress() }, 1000)
-        }
-    }
-
-    private fun formatTime(millis: Long): String {
-        val seconds = (millis / 1000) % 60
-        val minutes = (millis / (1000 * 60)) % 60
-        val hours = (millis / (1000 * 60 * 60)) % 24
-        return if (hours > 0) String.format("%02d:%02d:%02d", hours, minutes, seconds)
-        else String.format("%02d:%02d", minutes, seconds)
-    }
-
-    private fun showControls() {
-        controlsLayout.visibility = View.VISIBLE
-        bottomControls.visibility = View.VISIBLE
-        hideHandler.removeCallbacks(hideRunnable)
-        hideHandler.postDelayed(hideRunnable, 3000)
-    }
-
-    private fun hideControls() {
-        controlsLayout.visibility = View.GONE
-        bottomControls.visibility = View.GONE
-        hideHandler.removeCallbacks(hideRunnable)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        player.release()
-        hideHandler.removeCallbacks(hideRunnable)
-    }
-}
+</androidx.constraintlayout.widget.ConstraintLayout>

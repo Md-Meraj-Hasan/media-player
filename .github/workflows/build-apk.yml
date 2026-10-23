@@ -66,7 +66,7 @@ jobs:
             exit 1
           fi
 
-          if [ ! -f scripts/integrate-native-media.cjs ] || [ ! -f android-native/MediaPermissionPlugin.kt ] || [ ! -f android-native/MediaLibraryScannerPlugin.kt ] || [ ! -f android-native/LibVlcUriResolver.kt ]; then
+          if [ ! -f scripts/integrate-native-media.cjs ] || [ ! -f android-native/MediaPermissionPlugin.kt ] || [ ! -f android-native/MediaLibraryScannerPlugin.kt ] || [ ! -f android-native/MerajPlaybackService.kt ]; then
             echo "ERROR: Native media integration files are missing."
             exit 1
           fi
@@ -99,20 +99,6 @@ jobs:
 
       - name: Integrate native media permissions and scanner
         run: node scripts/integrate-native-media.cjs
-
-      - name: Verify LibVLC URI resolver was integrated
-        shell: bash
-        run: |
-          set -euo pipefail
-          RESOLVER=$(find android/app/src/main/java -name 'LibVlcUriResolver.kt' -print -quit)
-          if [ -z "$RESOLVER" ]; then
-            echo "ERROR: LibVlcUriResolver.kt was not copied into Android sources."
-            find android/app/src/main/java -type f -maxdepth 8 -print
-            exit 1
-          fi
-          grep -q 'object LibVlcUriResolver' "$RESOLVER" || { echo "ERROR: resolver object declaration is missing"; exit 1; }
-          PACKAGE=$(grep -m1 '^package ' "$RESOLVER" | sed 's/^package //')
-          echo "LibVLC URI resolver integrated: $RESOLVER (package $PACKAGE)"
 
       - name: Block internet permission
         run: node scripts/strip-internet-permission.cjs

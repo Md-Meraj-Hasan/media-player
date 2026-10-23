@@ -184,14 +184,14 @@ class NativeVideoPlayerActivity : Activity() {
         times.addView(status, LinearLayout.LayoutParams(0, dp(22), 1f))
         val speed = label("1.0×", 15f, true).apply {
             setPadding(dp(12), 0, dp(12), 0)
-            setOnClickListener { val rates = floatArrayOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f); val next = (rates.indexOf(currentRate).coerceAtLeast(0) + 1) % rates.size; currentRate = rates[next]; player?.setRate(currentRate); text = "${currentRate}×" }
+            setOnClickListener { val rates = floatArrayOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f); val next = (rates.indexOfFirst { it == currentRate }.coerceAtLeast(0) + 1) % rates.size; currentRate = rates[next]; player?.setRate(currentRate); text = "${currentRate}×" }
         }
         times.addView(speed)
         timeline.addView(times)
         overlay.addView(timeline)
         val scroll = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; clipToPadding = false; setPadding(0, dp(5), 0, 0) }
         thumbnailRow = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        scroll.addView(thumbnailRow, HorizontalScrollView.LayoutParams(-2, -2))
+        scroll.addView(thumbnailRow, LinearLayout.LayoutParams(-2, -2))
         overlay.addView(scroll, LinearLayout.LayoutParams(-1, dp(94)))
         val overlayParams = FrameLayout.LayoutParams(-1, -1, Gravity.BOTTOM)
         root.addView(overlay, overlayParams)

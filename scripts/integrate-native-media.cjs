@@ -19,18 +19,6 @@ function walk(dir, predicate, out = []) {
 }
 
 if (!fs.existsSync(androidRoot)) throw new Error('Android project not found. Run npx cap add android first.');
-const settingsGradle = path.join(androidRoot, 'settings.gradle');
-const capacitorSettingsGradle = path.join(androidRoot, 'capacitor.settings.gradle');
-// Capacitor 7's generated settings.gradle applies capacitor.settings.gradle;
-// the :capacitor-android include may live in that applied file rather than the
-// top-level settings.gradle. Check the combined configuration.
-const settingsText = [
-  fs.existsSync(settingsGradle) ? fs.readFileSync(settingsGradle, 'utf8') : '',
-  fs.existsSync(capacitorSettingsGradle) ? fs.readFileSync(capacitorSettingsGradle, 'utf8') : ''
-].join('\\n');
-if (fs.existsSync(settingsGradle) && !settingsText.includes('capacitor-android')) {
-  throw new Error('The Android folder is not a correctly generated Capacitor project: :capacitor-android is missing from settings.gradle and capacitor.settings.gradle. Delete android/ and run npx cap add android.');
-}
 if (!fs.existsSync(manifest)) throw new Error(`AndroidManifest.xml not found at ${manifest}`);
 
 // Capacitor templates may generate MainActivity.kt or MainActivity.java and the
@@ -59,7 +47,7 @@ if (mainActivity) {
 }
 
 const activityDir = path.dirname(mainActivity);
-for (const name of ['MediaPermissionPlugin.kt', 'MediaLibraryScannerPlugin.kt', 'MerajMediaPlayerPlugin.kt', 'MerajPlaybackService.kt', 'NativeVideoPlayerActivity.kt']) {
+for (const name of ['MediaPermissionPlugin.kt', 'MediaLibraryScannerPlugin.kt', 'MerajMediaPlayerPlugin.kt', 'NativeVideoPlayerActivity.kt']) {
   const source = path.join(nativeRoot, name);
   if (!fs.existsSync(source)) throw new Error(`Required native plugin source missing: ${source}`);
   let code = fs.readFileSync(source, 'utf8');
@@ -146,68 +134,22 @@ function ensureKotlinGradlePlugin() {
 
 ensureKotlinGradlePlugin();
 
-// Keep Kotlin bytecode target aligned with Java 21 used by the GitHub Actions
-// build. The workflow configures Java source/target compatibility to 21, so
-// Kotlin must also target 21 to avoid compileDebugKotlin target-validation failure.
-function ensureKotlinJvmTarget21() {
-  const appGradle = path.join(appRoot, 'build.gradle');
-  const appGradleKts = path.join(appRoot, 'build.gradle.kts');
-  const file = fs.existsSync(appGradle) ? appGradle : appGradleKts;
-  if (!fs.existsSync(file)) throw new Error('Cannot set Kotlin JVM target: app Gradle file is missing.');
-  let text = fs.readFileSync(file, 'utf8');
-  const marker = '// MERAJ_KOTLIN_JVM_TARGET_21';
-  if (text.includes(marker)) return;
-  if (file.endsWith('.kts')) {
-    text += `\n\n${marker}\ntasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {\n    kotlinOptions.jvmTarget = \"17\"\n}\n`;
-  } else {
-    text += `\n\n${marker}\ntasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {\n    kotlinOptions {\n        jvmTarget = '21'\n    }\n}\n`;
-  }
-  fs.writeFileSync(file, text);
-}
-ensureKotlinJvmTarget21();
-
 const appGradle = path.join(appRoot, 'build.gradle');
-const appGradleKts = path.join(appRoot, 'build.gradle.kts');
-const gradleFile = fs.existsSync(appGradle) ? appGradle : appGradleKts;
-if (!fs.existsSync(gradleFile)) throw new Error('Could not find android/app/build.gradle or build.gradle.kts');
-let gradleText = fs.readFileSync(gradleFile, 'utf8');
-const isKotlinDsl = gradleFile.endsWith('.kts');
-const depBlock = isKotlinDsl
-  ? `dependencies {\n    implementation("androidx.media3:media3-exoplayer:1.5.1")\n    implementation("androidx.media3:media3-session:1.5.1")\n    implementation("androidx.media3:media3-ui:1.5.1")\n}`
-  : `dependencies {\n    implementation 'androidx.media3:media3-exoplayer:1.5.1'\n    implementation 'androidx.media3:media3-session:1.5.1'\n    implementation 'androidx.media3:media3-ui:1.5.1'\n}`;
-const depLines = [
-  ['androidx.media3:media3-exoplayer', isKotlinDsl ? '    implementation("androidx.media3:media3-exoplayer:1.5.1")' : "    implementation 'androidx.media3:media3-exoplayer:1.5.1'"],
-  ['androidx.media3:media3-session', isKotlinDsl ? '    implementation("androidx.media3:media3-session:1.5.1")' : "    implementation 'androidx.media3:media3-session:1.5.1'"],
-  ['androidx.media3:media3-ui', isKotlinDsl ? '    implementation("androidx.media3:media3-ui:1.5.1")' : "    implementation 'androidx.media3:media3-ui:1.5.1'"]
-];
-const hasDependenciesBlock = /\bdependencies\s*\{/.test(gradleText);
-if (!hasDependenciesBlock) {
-  gradleText = gradleText.trimEnd() + '\n\n' + depBlock + '\n';
-} else {
-  for (const [coordinate, line] of depLines) {
-    if (!gradleText.includes(coordinate)) {
-      gradleText = gradleText.replace(/\bdependencies\s*\{/, match => `${match}\n${line}`);
-    }
-  }
+let gradleText = fs.readFileSync(appGradle, 'utf8');
+// Remove any old Media3/ExoPlayer dependencies and add LibVLC Android.
+gradleText = gradleText.replace(/^\s*implementation\s+['"]androidx\.media3:[^'"]+['"]\s*;?\s*$/gm, '');
+gradleText = gradleText.replace(/^\s*implementation\s+['"]com\.google\.android\.exoplayer:[^'"]+['"]\s*;?\s*$/gm, '');
+if (!gradleText.includes('org.videolan.android:libvlc-all')) {
+  if (!/dependencies\s*\{/.test(gradleText)) throw new Error('Could not find dependencies block in android/app/build.gradle');
+  gradleText = gradleText.replace(/dependencies\s*\{/, match => `${match}\n    implementation 'org.videolan.android:libvlc-all:3.6.0'`);
 }
-fs.writeFileSync(gradleFile, gradleText);
+fs.writeFileSync(appGradle, gradleText);
 
-
-// Register the MediaSessionService and foreground playback permissions.
-xml = fs.readFileSync(manifest, 'utf8');
-const servicePermissions = [
-  '<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />',
-  '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />'
-];
-for (const permission of servicePermissions) {
-  if (!xml.includes(permission)) xml = xml.replace(/<manifest\b[^>]*>/, match => `${match}\n    ${permission}`);
-}
+// Register the full-screen LibVLC video activity. The audio player is an in-process
+// LibVLC plugin and no Media3 service is required.
 if (!xml.includes('NativeVideoPlayerActivity')) {
   xml = xml.replace(/<application\b[^>]*>/, match => `${match}\n        <activity android:name=".NativeVideoPlayerActivity" android:exported="false" android:screenOrientation="unspecified" android:configChanges="orientation|screenSize|keyboardHidden" />`);
 }
-if (!xml.includes('MerajPlaybackService')) {
-  xml = xml.replace(/<application\b[^>]*>/, match => `${match}\n        <service android:name=".MerajPlaybackService" android:foregroundServiceType="mediaPlayback" android:exported="true">\n            <intent-filter>\n                <action android:name="androidx.media3.session.MediaSessionService" />\n            </intent-filter>\n        </service>`);
-}
 fs.writeFileSync(manifest, xml);
 
-console.log(`Native Media3 audio service/plugin and direct-URI video activity copied and registered in ${mainActivity}; media permissions and ExoPlayer/session/UI dependencies configured.`);
+console.log(`LibVLC audio plugin and direct-URI video activity copied and registered in ${mainActivity}; Media3/ExoPlayer dependencies removed.`);

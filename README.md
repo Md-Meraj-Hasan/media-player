@@ -1,13 +1,11 @@
-# Meraj Media — Offline Audio + Video Player
+# Meraj Media — Offline Audio + Video Player (LibVLC)
 
-This project keeps the original offline audio library/player and replaces the former **MP3 Tools** navigation section with the full **Video Player** UI. The video player runs in a separate local HTML page inside an iframe to isolate its CSS and JavaScript from the existing audio player. A parent bridge forwards native media scan, thumbnail/cache, orientation and back-button calls to Capacitor plugins.
+This project uses LibVLC as the native Android playback engine for local audio and video. The existing HTML/CSS/JavaScript interface and Capacitor bridge are retained. The Android build script adds `org.videolan.android:libvlc-all:3.6.0` and removes Media3/ExoPlayer dependencies.
 
-- Audio: local music scan, library, albums, artists, folders, favorites, queue/player, playback controls and themes.
-- Video: local video library, search/folders, thumbnails, playback, seekbar, previous/next, 15-second seek, volume, fit/fullscreen, landscape rotate, lock controls and 0.5×–2× speed popup.
-- Offline-first; no streaming or ad features. Build workflow strips the INTERNET permission.
+- Local audio and video only; the build workflow strips Android INTERNET permission.
+- Video playback uses the selected Android content URI directly.
+- Codec/container support depends on the LibVLC build and device/ABI compatibility.
+- The JavaScript/browser preview still uses browser media APIs; native Android playback is LibVLC.
+- Validate the GitHub Actions APK build and test playback on the target Android phone before release.
 
-## Browser preview
-Run `npm install` then `npm run start`. Browser security requires selecting local audio folders/files for audio. Native video library scanning, orientation lock and Android MediaStore cache playback require the Android APK.
-
-## Android build
-GitHub Actions builds the debug APK. The native integration script registers media plugins and Media3 dependencies; physical-device testing is still required for Android permissions, codec support and orientation behavior.
+Note: this migration uses an in-process LibVLC audio player. Background playback/media notification integration and the former Android audio-session equalizer presets require separate LibVLC-specific implementation.

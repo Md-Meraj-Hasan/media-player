@@ -10,7 +10,7 @@ Required native work:
 2. Request `READ_MEDIA_AUDIO` and `READ_MEDIA_VIDEO` on Android 13+; handle the appropriate
    media read permissions on older supported Android versions.
 3. Return media metadata, stable content URIs, duration, size, MIME type and relative path.
-4. Provide playback support for `content://` URIs, ideally through Android Media3/ExoPlayer,
+4. Provide playback support for `content://` URIs, ideally through Android LibVLC,
    and return items in a single library result.
 5. Confirm the plugin remains registered in the generated Android MainActivity / Capacitor plugin setup.
 6. Verify scan speed and permission-denied/empty-library states on a physical Android phone.

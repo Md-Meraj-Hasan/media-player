@@ -6,12 +6,13 @@ let fit = 0, isLandscape = false, currentFilterFolder = '__all__';
 
 const ui = [$('toolbar'), $('center'), $('seekArea'), $('bottom')];
 
-// Android Native Bridge Communication
+// 1. ANDROID NATIVE BRIDGE (This connects HTML to Android)
 function callNative(action, payload = {}) {
   return new Promise((resolve, reject) => {
-    if (!window.parent || window.parent === window) return reject(new Error("Not in app"));
+    if (!window.parent || window.parent === window) {
+      return reject(new Error("Parent window not found. Are you inside the app?"));
+    }
     
-    // Unique ID for this request
     const requestId = Math.random().toString(36).substring(7);
     
     const listener = (event) => {
@@ -24,14 +25,7 @@ function callNative(action, payload = {}) {
     };
     
     window.addEventListener('message', listener);
-    
-    // Send to parent (index.html)
-    window.parent.postMessage({ 
-      bridge: 'meraj-video-native', 
-      action, 
-      payload, 
-      requestId 
-    }, '*');
+    window.parent.postMessage({ bridge: 'meraj-video-native', action, payload, requestId }, '*');
   });
 }
 
@@ -55,17 +49,16 @@ function armHide() {
   if (!locked && !video.paused) hideTimer = setTimeout(() => controls(false), 4000);
 }
 
-// Auto Scan Native Videos
+// 2. SCAN VIDEOS (Auto load from phone storage)
 async function scanNativeVideos() {
+  $('videoGrid').innerHTML = '<div class="empty-state">Scanning device... Please wait.</div>';
   try {
-    // 1. Ask for permission
     const perm = await callNative('permission');
     if (!perm || !perm.granted) {
-      alert("Permission denied! Please allow video access.");
+      $('videoGrid').innerHTML = '<div class="empty-state">Permission denied. Please allow video access in settings.</div>';
       return;
     }
     
-    // 2. Scan videos
     const result = await callNative('scan', { type: 'video' });
     
     if (result && result.items && result.items.length > 0) {
@@ -83,7 +76,7 @@ async function scanNativeVideos() {
     }
   } catch (e) {
     console.error("Scan failed", e);
-    alert("Scan failed: " + e.message);
+    $('videoGrid').innerHTML = '<div class="empty-state">Scan failed: ' + e.message + '</div>';
   }
 }
 
@@ -102,7 +95,7 @@ function renderLibraryGrid() {
     card.className = 'video-card';
     card.innerHTML = `
       <div class="video-thumb-wrap">
-        <div style="width:100%;height:100%;display:grid;place-items:center;background:#222;color:#888">▶</div>
+        <div style="width:100%;height:100%;display:grid;place-items:center;background:#222;color:#888;font-size:24px">▶</div>
       </div>
       <div class="card-info">
         <div class="card-title">${item.name}</div>
@@ -161,7 +154,7 @@ async function playVideo(index) {
         name: item.name,
         queue: currentVideos.map(v => ({uri: v.url, name: v.name, mimeType: 'video/*'}))
       });
-      // Hide web player, show library again (since native player takes over)
+      // Native player opens, hide web UI
       $('playerView').classList.add('hidden');
       $('libraryView').classList.remove('hidden');
     } catch (e) {
@@ -170,12 +163,10 @@ async function playVideo(index) {
   }
 }
 
-// UI Controls
+// 3. BUTTONS FIX
 $('libBackBtn').onclick = () => window.parent.postMessage({ type: 'NAVIGATE_PAGE', target: 'home' }, '*');
 
-$('libScanBtn').onclick = () => {
-  scanNativeVideos();
-};
+$('libScanBtn').onclick = () => scanNativeVideos();
 
 $('tabVideos').onclick = () => {
   $('tabVideos').classList.add('active');
@@ -193,18 +184,14 @@ $('tabFolders').onclick = () => {
   renderLibraryGrid();
 };
 
-// Share Video
 $('shareBtn').onclick = async () => {
   if (selected < 0) return;
   const cur = currentVideos[selected];
   try {
     await callNative('shareMedia', { uri: cur.url, name: cur.name, mimeType: 'video/*' });
-  } catch (e) {
-    alert("Share failed: " + e.message);
-  }
+  } catch (e) { alert("Share failed: " + e.message); }
 };
 
-// Rotate
 $('rotateBtn').onclick = async () => {
   isLandscape = !isLandscape;
   try {
@@ -213,13 +200,13 @@ $('rotateBtn').onclick = async () => {
   } catch (e) { alert("Rotate failed"); }
 };
 
-// Lock System
 $('lockBtn').onclick = () => {
   locked = true;
   app.classList.add('locked');
   $('unlockTap').hidden = false;
   clearTimeout(hideTimer);
 };
+
 function unlockControls() {
   locked = false;
   app.classList.remove('locked');
@@ -228,12 +215,9 @@ function unlockControls() {
 }
 $('unlockTap').onclick = unlockControls;
 
-// Init Scan on Load
+// Auto Scan on Load
 window.addEventListener('load', () => {
   if (window.parent !== window) {
-    // Auto scan after short delay
-    setTimeout(() => {
-      scanNativeVideos();
-    }, 500);
+    setTimeout(() => scanNativeVideos(), 1000);
   }
 });

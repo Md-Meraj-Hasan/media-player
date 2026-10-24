@@ -15,10 +15,9 @@ import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
 import com.getcapacitor.annotation.CapacitorPlugin
 
-/** Queries Android MediaStore for shared audio/video files after runtime permission is granted. */
 @CapacitorPlugin(name = "MediaLibraryScanner")
 class MediaLibraryScannerPlugin : Plugin() {
-    /** Opens Android's native chooser with the selected local audio/video content URI. */
+
     @PluginMethod
     fun shareMedia(call: PluginCall) {
         val rawUri = call.getString("uri")
@@ -39,7 +38,7 @@ class MediaLibraryScannerPlugin : Plugin() {
             activity.runOnUiThread { activity.startActivity(chooser) }
             call.resolve(JSObject().put("opened", true))
         } catch (e: Exception) {
-            call.reject("Could not open Android share menu: ${e.message}", e)
+            call.reject("Could not open share menu: ${e.message}", e)
         }
     }
 
@@ -67,6 +66,7 @@ class MediaLibraryScannerPlugin : Plugin() {
             MediaStore.Audio.Media.ALBUM
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) projection.add(MediaStore.MediaColumns.RELATIVE_PATH)
+        
         val sort = if (type == "video") "${MediaStore.Video.Media.DISPLAY_NAME} COLLATE NOCASE ASC"
                    else "${MediaStore.Audio.Media.DISPLAY_NAME} COLLATE NOCASE ASC"
         try {
@@ -104,35 +104,7 @@ class MediaLibraryScannerPlugin : Plugin() {
             call.reject("Could not scan device media: ${e.message}", e)
         }
     }
-    /** Returns a small cached video-frame thumbnail as a data URL for library cards. */
-    @PluginMethod
-    fun getThumbnail(call: PluginCall) {
-        val rawUri = call.getString("uri")
-        if (rawUri.isNullOrBlank()) { call.reject("Missing media URI"); return }
-        val retriever = MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(context, Uri.parse(rawUri))
-            val frame = retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                ?: retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-            if (frame == null) { call.resolve(JSObject().put("thumbnail", "")); return }
-            val width = 320
-            val scale = minOf(1.0, width.toDouble() / frame.width.toDouble())
-            val thumb = if (scale < 1.0) Bitmap.createScaledBitmap(frame, (frame.width * scale).toInt().coerceAtLeast(1), (frame.height * scale).toInt().coerceAtLeast(1), true) else frame
-            val bytes = ByteArrayOutputStream()
-            thumb.compress(Bitmap.CompressFormat.JPEG, 78, bytes)
-            val encoded = Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
-            if (thumb !== frame) thumb.recycle()
-            frame.recycle()
-            call.resolve(JSObject().put("thumbnail", "data:image/jpeg;base64,$encoded"))
-        } catch (e: Exception) {
-            call.resolve(JSObject().put("thumbnail", ""))
-        } finally {
-            try { retriever.release() } catch (_: Exception) {}
-        }
-    }
 
-    /** Copies a MediaStore URI into app cache for WebView playback. Large files use a larger buffer and a temporary file so incomplete copies are not played. Cache names are URI-specific to avoid filename collisions. */
-    /** Launch native Media3 playback directly from the original content:// URI. No video copy/cache is created. */
     @PluginMethod
     fun launchVideo(call: PluginCall) {
         val rawUri = call.getString("uri")
@@ -142,6 +114,8 @@ class MediaLibraryScannerPlugin : Plugin() {
             val intent = android.content.Intent(context, NativeVideoPlayerActivity::class.java).apply {
                 putExtra(NativeVideoPlayerActivity.EXTRA_URI, uri.toString())
                 putExtra(NativeVideoPlayerActivity.EXTRA_TITLE, call.getString("name", "Video") ?: "Video")
+                
+                // Queue Setup
                 val queue = call.getArray("queue")
                 val queueUris = ArrayList<String>()
                 val queueTitles = ArrayList<String>()
@@ -160,6 +134,7 @@ class MediaLibraryScannerPlugin : Plugin() {
                 putStringArrayListExtra(NativeVideoPlayerActivity.EXTRA_QUEUE_URIS, queueUris)
                 putStringArrayListExtra(NativeVideoPlayerActivity.EXTRA_QUEUE_TITLES, queueTitles)
                 putStringArrayListExtra(NativeVideoPlayerActivity.EXTRA_QUEUE_MIMES, queueMimes)
+                
                 addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 clipData = android.content.ClipData.newUri(context.contentResolver, "video", uri)
             }
@@ -169,5 +144,4 @@ class MediaLibraryScannerPlugin : Plugin() {
             call.reject("Could not start native video playback: ${e.message}", e)
         }
     }
-
 }

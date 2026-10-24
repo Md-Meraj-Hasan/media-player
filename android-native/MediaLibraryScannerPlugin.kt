@@ -106,6 +106,32 @@ class MediaLibraryScannerPlugin : Plugin() {
     }
 
     @PluginMethod
+    fun getThumbnail(call: PluginCall) {
+        val rawUri = call.getString("uri")
+        if (rawUri.isNullOrBlank()) { call.reject("Missing media URI"); return }
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(context, Uri.parse(rawUri))
+            val frame = retriever.getFrameAtTime(1_000_000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                ?: retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+            if (frame == null) { call.resolve(JSObject().put("thumbnail", "")); return }
+            val width = 320
+            val scale = minOf(1.0, width.toDouble() / frame.width.toDouble())
+            val thumb = if (scale < 1.0) Bitmap.createScaledBitmap(frame, (frame.width * scale).toInt().coerceAtLeast(1), (frame.height * scale).toInt().coerceAtLeast(1), true) else frame
+            val bytes = ByteArrayOutputStream()
+            thumb.compress(Bitmap.CompressFormat.JPEG, 78, bytes)
+            val encoded = Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP)
+            if (thumb !== frame) thumb.recycle()
+            frame.recycle()
+            call.resolve(JSObject().put("thumbnail", "data:image/jpeg;base64,$encoded"))
+        } catch (e: Exception) {
+            call.resolve(JSObject().put("thumbnail", ""))
+        } finally {
+            try { retriever.release() } catch (_: Exception) {}
+        }
+    }
+
+    @PluginMethod
     fun launchVideo(call: PluginCall) {
         val rawUri = call.getString("uri")
         if (rawUri.isNullOrBlank()) { call.reject("Missing video URI"); return }
@@ -115,7 +141,6 @@ class MediaLibraryScannerPlugin : Plugin() {
                 putExtra(NativeVideoPlayerActivity.EXTRA_URI, uri.toString())
                 putExtra(NativeVideoPlayerActivity.EXTRA_TITLE, call.getString("name", "Video") ?: "Video")
                 
-                // Queue Setup
                 val queue = call.getArray("queue")
                 val queueUris = ArrayList<String>()
                 val queueTitles = ArrayList<String>()
